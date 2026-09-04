@@ -336,19 +336,31 @@ func loadConfig() Config {
 		}
 	}
 	cfg := Config{Listen: os.Getenv("GHCR_STATS_LISTEN"), Owner: os.Getenv("GHCR_STATS_OWNER"), DBPath: os.Getenv("GHCR_STATS_DB"), Packages: pkgs, PackagesExplicit: explicit, Interval: interval, GitHubToken: readToken()}
-	if cfg.Listen == "" { cfg.Listen = ":8080" }
-	if cfg.Owner == "" { cfg.Owner = "Ploos-AS" }
-	if cfg.DBPath == "" { cfg.DBPath = "/data/ghcr-stats.db" }
+	if cfg.Listen == "" {
+		cfg.Listen = ":8080"
+	}
+	if cfg.Owner == "" {
+		cfg.Owner = "Ploos-AS"
+	}
+	if cfg.DBPath == "" {
+		cfg.DBPath = "/data/ghcr-stats.db"
+	}
 	return cfg
 }
 func main() {
 	cfg := loadConfig()
 	store, err := OpenStore(cfg.DBPath)
-	if err != nil { log.Fatal(err) }
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer store.Close()
 	client := &http.Client{Timeout: 25 * time.Second}
 	app := &App{cfg: cfg, store: store, collector: GitHubHTMLCollector{Client: client}, packages: append([]string(nil), cfg.Packages...), packageSource: "fallback", lastErr: map[string]string{}}
-	if cfg.PackagesExplicit { app.packageSource = "explicit" } else if cfg.GitHubToken != "" { app.discoverer = GitHubPackagesDiscoverer{Client: client, Token: cfg.GitHubToken} }
+	if cfg.PackagesExplicit {
+		app.packageSource = "explicit"
+	} else if cfg.GitHubToken != "" {
+		app.discoverer = GitHubPackagesDiscoverer{Client: client, Token: cfg.GitHubToken}
+	}
 	go app.loop(context.Background())
 	srv := &http.Server{Addr: cfg.Listen, Handler: app.routes(), ReadHeaderTimeout: 5 * time.Second}
 	log.Printf("ghcr-stats %s (%s) listening on %s for %s (%d initial packages, source=%s)", version, revision, cfg.Listen, cfg.Owner, len(cfg.Packages), app.packageSource)

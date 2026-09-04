@@ -30,13 +30,13 @@ type AnalyticsSummary struct {
 }
 
 type RankingEntry struct {
-	Rank                 int    `json:"rank"`
-	Package              string `json:"package"`
-	Downloads            int64  `json:"downloads"`
-	Delta                int64  `json:"delta"`
-	Stale                bool   `json:"stale"`
-	CollectorUp          bool   `json:"collector_up"`
-	ConsecutiveFailures  uint64 `json:"consecutive_failures"`
+	Rank                int    `json:"rank"`
+	Package             string `json:"package"`
+	Downloads           int64  `json:"downloads"`
+	Delta               int64  `json:"delta"`
+	Stale               bool   `json:"stale"`
+	CollectorUp         bool   `json:"collector_up"`
+	ConsecutiveFailures uint64 `json:"consecutive_failures"`
 }
 
 func parsePeriod(v string) (time.Duration, string, error) {
@@ -124,13 +124,21 @@ func (a *App) analyticsSummary(pkg string, now time.Time) (AnalyticsSummary, err
 		return AnalyticsSummary{}, err
 	}
 	d24, err := a.store.DeltaSince(pkg, now.Add(-24*time.Hour))
-	if err != nil { return AnalyticsSummary{}, err }
+	if err != nil {
+		return AnalyticsSummary{}, err
+	}
 	d7, err := a.store.DeltaSince(pkg, now.Add(-7*24*time.Hour))
-	if err != nil { return AnalyticsSummary{}, err }
+	if err != nil {
+		return AnalyticsSummary{}, err
+	}
 	d30, err := a.store.DeltaSince(pkg, now.Add(-30*24*time.Hour))
-	if err != nil { return AnalyticsSummary{}, err }
+	if err != nil {
+		return AnalyticsSummary{}, err
+	}
 	d90, err := a.store.DeltaSince(pkg, now.Add(-90*24*time.Hour))
-	if err != nil { return AnalyticsSummary{}, err }
+	if err != nil {
+		return AnalyticsSummary{}, err
+	}
 	return AnalyticsSummary{Package: pkg, Downloads: st.Downloads, Downloads24h: d24, Downloads7d: d7, Downloads30d: d30, Downloads90d: d90, UpdatedAt: st.UpdatedAt}, nil
 }
 
@@ -138,45 +146,65 @@ func (a *App) orgAnalytics(now time.Time) AnalyticsSummary {
 	var out AnalyticsSummary
 	for _, pkg := range a.packageNames() {
 		s, err := a.analyticsSummary(pkg, now)
-		if err != nil { continue }
+		if err != nil {
+			continue
+		}
 		out.Downloads += s.Downloads
 		out.Downloads24h += s.Downloads24h
 		out.Downloads7d += s.Downloads7d
 		out.Downloads30d += s.Downloads30d
 		out.Downloads90d += s.Downloads90d
-		if s.UpdatedAt.After(out.UpdatedAt) { out.UpdatedAt = s.UpdatedAt }
+		if s.UpdatedAt.After(out.UpdatedAt) {
+			out.UpdatedAt = s.UpdatedAt
+		}
 	}
 	return out
 }
 
 func periodDelta(s AnalyticsSummary, period string, allDelta int64) int64 {
 	switch period {
-	case "24h": return s.Downloads24h
-	case "7d": return s.Downloads7d
-	case "30d": return s.Downloads30d
-	case "90d": return s.Downloads90d
-	case "all": return allDelta
-	default: return 0
+	case "24h":
+		return s.Downloads24h
+	case "7d":
+		return s.Downloads7d
+	case "30d":
+		return s.Downloads30d
+	case "90d":
+		return s.Downloads90d
+	case "all":
+		return allDelta
+	default:
+		return 0
 	}
 }
 
 func (a *App) rankings(period string, now time.Time) ([]RankingEntry, error) {
 	_, normalized, err := parsePeriod(period)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	entries := make([]RankingEntry, 0, len(a.packageNames()))
 	for _, pkg := range a.packageNames() {
 		s, err := a.analyticsSummary(pkg, now)
-		if errors.Is(err, sql.ErrNoRows) { continue }
-		if err != nil { return nil, err }
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
 		allDelta, _ := a.store.DeltaAll(pkg)
 		h := a.collectorHealth(pkg, now)
 		entries = append(entries, RankingEntry{Package: pkg, Downloads: s.Downloads, Delta: periodDelta(s, normalized, allDelta), Stale: h.Stale, CollectorUp: h.Up, ConsecutiveFailures: h.ConsecutiveFailures})
 	}
 	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Delta == entries[j].Delta { return entries[i].Package < entries[j].Package }
+		if entries[i].Delta == entries[j].Delta {
+			return entries[i].Package < entries[j].Package
+		}
 		return entries[i].Delta > entries[j].Delta
 	})
-	for i := range entries { entries[i].Rank = i + 1 }
+	for i := range entries {
+		entries[i].Rank = i + 1
+	}
 	return entries, nil
 }
 
@@ -196,48 +224,81 @@ func (a *App) handlePackageAPI(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handlePackageHistory(w http.ResponseWriter, r *http.Request, pkg string) {
 	d, period, err := parsePeriod(r.URL.Query().Get("period"))
-	if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	since := time.Time{}
-	if d > 0 { since = time.Now().UTC().Add(-d) }
+	if d > 0 {
+		since = time.Now().UTC().Add(-d)
+	}
 	points, err := a.store.History(pkg, since)
-	if err != nil { http.Error(w, "history query failed", http.StatusInternalServerError); return }
-	if len(points) == 0 { http.Error(w, "no data", http.StatusNotFound); return }
+	if err != nil {
+		http.Error(w, "history query failed", http.StatusInternalServerError)
+		return
+	}
+	if len(points) == 0 {
+		http.Error(w, "no data", http.StatusNotFound)
+		return
+	}
 	h := a.collectorHealth(pkg, time.Now().UTC())
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"package": pkg, "period": period, "points": points, "collector_up": h.Up, "stale": h.Stale, "last_success": h.LastSuccess})
 }
 
 func (a *App) handleRankings(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api/v1/rankings" { http.NotFound(w, r); return }
+	if r.URL.Path != "/api/v1/rankings" {
+		http.NotFound(w, r)
+		return
+	}
 	period := r.URL.Query().Get("period")
 	items, err := a.rankings(period, time.Now().UTC())
-	if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	_, normalized, _ := parsePeriod(period)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"owner": a.cfg.Owner, "period": normalized, "rankings": items})
 }
 
 func (a *App) handleOrgHistory(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api/v1/org/history" { http.NotFound(w, r); return }
+	if r.URL.Path != "/api/v1/org/history" {
+		http.NotFound(w, r)
+		return
+	}
 	d, period, err := parsePeriod(r.URL.Query().Get("period"))
-	if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	since := time.Time{}
-	if d > 0 { since = time.Now().UTC().Add(-d) }
+	if d > 0 {
+		since = time.Now().UTC().Add(-d)
+	}
 	byTime := map[string]int64{}
 	for _, pkg := range a.packageNames() {
 		points, err := a.store.History(pkg, since)
-		if err != nil { continue }
-		for _, p := range points { byTime[p.Timestamp.UTC().Format(time.RFC3339Nano)] += p.Downloads }
+		if err != nil {
+			continue
+		}
+		for _, p := range points {
+			byTime[p.Timestamp.UTC().Format(time.RFC3339Nano)] += p.Downloads
+		}
 	}
 	keys := make([]string, 0, len(byTime))
-	for k := range byTime { keys = append(keys, k) }
+	for k := range byTime {
+		keys = append(keys, k)
+	}
 	sort.Strings(keys)
 	points := make([]HistoryPoint, 0, len(keys))
 	var prev int64
 	for i, k := range keys {
 		ts, _ := time.Parse(time.RFC3339Nano, k)
 		delta := int64(0)
-		if i > 0 && byTime[k] >= prev { delta = byTime[k] - prev }
+		if i > 0 && byTime[k] >= prev {
+			delta = byTime[k] - prev
+		}
 		points = append(points, HistoryPoint{Timestamp: ts, Downloads: byTime[k], Delta: delta})
 		prev = byTime[k]
 	}
@@ -264,9 +325,15 @@ func (a *App) handleM3Index(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/package/") {
 		pkg := strings.Trim(strings.TrimPrefix(r.URL.Path, "/package/"), "/")
-		if pkg == "" || strings.Contains(pkg, "/") { http.NotFound(w, r); return }
+		if pkg == "" || strings.Contains(pkg, "/") {
+			http.NotFound(w, r)
+			return
+		}
 		s, err := a.analyticsSummary(pkg, time.Now().UTC())
-		if err != nil { http.NotFound(w, r); return }
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = packageTemplate.Execute(w, map[string]any{"Summary": s, "Health": a.collectorHealth(pkg, time.Now().UTC())})
 		return
@@ -275,8 +342,12 @@ func (a *App) handleM3Index(w http.ResponseWriter, r *http.Request) {
 }
 
 func limitRankings(items []RankingEntry, raw string) []RankingEntry {
-	if raw == "" { return items }
+	if raw == "" {
+		return items
+	}
 	n, err := strconv.Atoi(raw)
-	if err != nil || n <= 0 || n >= len(items) { return items }
+	if err != nil || n <= 0 || n >= len(items) {
+		return items
+	}
 	return items[:n]
 }
