@@ -2,7 +2,9 @@ name: M4.3 bootstrap
 on:
   push:
     branches: [main]
-    paths: [m43_export.go]
+    paths:
+      - m43_export.go
+      - .github/workflows/m43-bootstrap.yml
 permissions:
   contents: write
 jobs:
