@@ -57,7 +57,7 @@ func TestM3HistoryAndAnalytics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Downloads != 150 || s.Downloads7d != 0 || s.Downloads30d != 25 || s.Downloads90d != 50 {
+	if s.Downloads != 150 || s.Downloads24h != 25 || s.Downloads7d != 25 || s.Downloads30d != 50 || s.Downloads90d != 0 {
 		t.Fatalf("unexpected summary: %#v", s)
 	}
 }
@@ -70,7 +70,7 @@ func TestM3Rankings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 2 || items[0].Package != "alpha" || items[0].Delta != 25 || items[0].Rank != 1 {
+	if len(items) != 2 || items[0].Package != "alpha" || items[0].Delta != 50 || items[0].Rank != 1 {
 		t.Fatalf("unexpected ranking: %#v", items)
 	}
 }
