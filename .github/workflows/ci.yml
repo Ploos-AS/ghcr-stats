@@ -40,8 +40,11 @@ jobs:
       - run: go vet ./...
       - run: docker compose config --quiet
       - run: docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t ghcr-stats:ci .
-      - name: Verify non-root
-        run: test "$(docker run --rm --entrypoint id ghcr-stats:ci -u)" = "1000"
+      - name: Verify non-root and OCI metadata
+        run: |
+          test "$(docker run --rm --entrypoint id ghcr-stats:ci -u)" = "1000"
+          test "$(docker image inspect ghcr-stats:ci --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "ci"
+          test "$(docker image inspect ghcr-stats:ci --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$GITHUB_SHA"
       - name: Runtime API and badge qualification
         run: |
           set -euxo pipefail
@@ -62,6 +65,23 @@ jobs:
             sleep 1
           done
           curl -fsS http://127.0.0.1:18080/healthz | grep -qx ok
+
+          curl -fsS http://127.0.0.1:18080/version > /tmp/version.json
+          python3 - <<'PY'
+          import json, os
+          data = json.load(open('/tmp/version.json'))
+          assert data['version'] == 'ci', data
+          assert data['revision'] == os.environ['GITHUB_SHA'], data
+          PY
+
+          for i in $(seq 1 15); do
+            status=$(docker inspect ghcr-stats-ci --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}')
+            if [ "$status" = healthy ]; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker inspect ghcr-stats-ci --format '{{.State.Health.Status}}')" = "healthy"
 
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:18080/api/v1/packages/soju > /tmp/soju.json; then
