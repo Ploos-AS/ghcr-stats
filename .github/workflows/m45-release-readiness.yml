@@ -37,7 +37,7 @@ jobs:
         run: |
           test -f .github/workflows/ci.yml
           test -f .github/workflows/m3-runtime.yml
-          test -f .github/workflows/m41-deployment.yml
+          test -f .github/workflows/deployment.yml
           test -f .github/workflows/m42-maintenance.yml
           test -f .github/workflows/m43-export.yml
           test -f .github/workflows/m44-observability.yml
