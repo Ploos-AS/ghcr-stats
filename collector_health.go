@@ -8,13 +8,11 @@ import (
 )
 
 type CollectorHealth struct {
-	Package             string    `json:"package"`
-	Up                  bool      `json:"up"`
-	Stale               bool      `json:"stale"`
-	LastSuccess         time.Time `json:"last_success,omitempty"`
-	LastError           string    `json:"last_error,omitempty"`
-	TotalFailures       uint64    `json:"total_failures"`
-	ConsecutiveFailures uint64    `json:"consecutive_failures"`
+	Package     string    `json:"package"`
+	Up          bool      `json:"up"`
+	Stale       bool      `json:"stale"`
+	LastSuccess time.Time `json:"last_success,omitempty"`
+	LastError   string    `json:"last_error,omitempty"`
 }
 
 func (a *App) staleAfter() time.Duration {
@@ -37,15 +35,11 @@ func (a *App) collectorHealth(pkg string, now time.Time) CollectorHealth {
 		h.Stale = true
 	}
 
-	a.mu.RLock()
-	h.LastError = a.lastErr[pkg]
-	a.mu.RUnlock()
-	if h.LastError != "" {
+	fs := a.failureStats(pkg)
+	h.LastError = fs.LastError
+	if h.LastError != "" || fs.Consecutive > 0 {
 		h.Up = false
 	}
-	fs := a.failureStats(pkg)
-	h.TotalFailures = fs.Total
-	h.ConsecutiveFailures = fs.Consecutive
 	return h
 }
 
@@ -56,17 +50,11 @@ func (a *App) handleHealthJSON(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(a.collectorHealth(pkg, time.Now().UTC()))
 		return
 	}
-	now := time.Now().UTC()
 	items := make([]CollectorHealth, 0, len(a.packageNames()))
 	for _, name := range a.packageNames() {
-		items = append(items, a.collectorHealth(name, now))
+		items = append(items, a.collectorHealth(name, time.Now().UTC()))
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"collector":           a.collector.Name(),
-		"stale_after_seconds": int64(a.staleAfter().Seconds()),
-		"org":                 a.orgHealth(now),
-		"packages":            items,
-	})
+	_ = json.NewEncoder(w).Encode(map[string]any{"collector": a.collector.Name(), "stale_after_seconds": int64(a.staleAfter().Seconds()), "packages": items, "org": a.orgHealth(time.Now().UTC())})
 }
 
 func (a *App) writeCollectorHealthMetrics(w http.ResponseWriter) {
