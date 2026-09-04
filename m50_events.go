@@ -37,6 +37,11 @@ type Event struct {
 	CreatedAt time.Time      `json:"created_at"`
 }
 
+type EventPage struct {
+	Items      []Event
+	NextCursor int64
+}
+
 func (s *Store) initEventSchema() error {
 	_, err := s.db.Exec(eventSchema)
 	return err
@@ -63,9 +68,9 @@ func (s *Store) SaveEvent(e Event) (int64, error) {
 	return res.LastInsertId()
 }
 
-func (s *Store) Events(pkg, typ, severity string, limit int) ([]Event, error) {
+func (s *Store) EventPage(pkg, typ, severity string, limit int, beforeID int64) (EventPage, error) {
 	if err := s.initEventSchema(); err != nil {
-		return nil, err
+		return EventPage{}, err
 	}
 	if limit <= 0 {
 		limit = 100
@@ -87,11 +92,15 @@ func (s *Store) Events(pkg, typ, severity string, limit int) ([]Event, error) {
 		q += ` AND severity=?`
 		args = append(args, severity)
 	}
+	if beforeID > 0 {
+		q += ` AND id<?`
+		args = append(args, beforeID)
+	}
 	q += ` ORDER BY id DESC LIMIT ?`
-	args = append(args, limit)
+	args = append(args, limit+1)
 	rows, err := s.db.Query(q, args...)
 	if err != nil {
-		return nil, err
+		return EventPage{}, err
 	}
 	defer rows.Close()
 	out := []Event{}
@@ -99,18 +108,31 @@ func (s *Store) Events(pkg, typ, severity string, limit int) ([]Event, error) {
 		var e Event
 		var meta, ts string
 		if err := rows.Scan(&e.ID, &e.Type, &e.Severity, &e.Package, &e.Message, &meta, &ts); err != nil {
-			return nil, err
+			return EventPage{}, err
 		}
 		if meta != "" && meta != "{}" {
 			_ = json.Unmarshal([]byte(meta), &e.Metadata)
 		}
 		e.CreatedAt, err = time.Parse(time.RFC3339Nano, ts)
 		if err != nil {
-			return nil, err
+			return EventPage{}, err
 		}
 		out = append(out, e)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return EventPage{}, err
+	}
+	page := EventPage{Items: out}
+	if len(page.Items) > limit {
+		page.Items = page.Items[:limit]
+		page.NextCursor = page.Items[len(page.Items)-1].ID
+	}
+	return page, nil
+}
+
+func (s *Store) Events(pkg, typ, severity string, limit int) ([]Event, error) {
+	page, err := s.EventPage(pkg, typ, severity, limit, 0)
+	return page.Items, err
 }
 
 func (s *Store) EventCount() (int64, error) {
@@ -166,21 +188,34 @@ func (a *App) handleEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
+	beforeID := int64(0)
+	if v := strings.TrimSpace(r.URL.Query().Get("cursor")); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 1 {
+			http.Error(w, "invalid cursor", http.StatusBadRequest)
+			return
+		}
+		beforeID = n
+	}
 	severity := strings.TrimSpace(r.URL.Query().Get("severity"))
 	if severity != "" && severity != "info" && severity != "warning" && severity != "error" {
 		http.Error(w, "invalid severity", http.StatusBadRequest)
 		return
 	}
-	items, err := a.store.Events(strings.TrimSpace(r.URL.Query().Get("package")), strings.TrimSpace(r.URL.Query().Get("type")), severity, limit)
+	page, err := a.store.EventPage(strings.TrimSpace(r.URL.Query().Get("package")), strings.TrimSpace(r.URL.Query().Get("type")), severity, limit, beforeID)
 	if err != nil && err != sql.ErrNoRows {
 		http.Error(w, "event query failed", http.StatusInternalServerError)
 		return
 	}
-	for i := range items {
-		items[i].Owner = a.cfg.Owner
+	for i := range page.Items {
+		page.Items[i].Owner = a.cfg.Owner
+	}
+	response := map[string]any{"owner": a.cfg.Owner, "events": page.Items}
+	if page.NextCursor > 0 {
+		response["next_cursor"] = strconv.FormatInt(page.NextCursor, 10)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"owner": a.cfg.Owner, "events": items})
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (a *App) writeM50Metrics(w http.ResponseWriter) {
