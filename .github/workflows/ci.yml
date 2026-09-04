@@ -16,10 +16,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
-      - name: Resolve module dependencies
+      - name: Verify module files
         run: |
           go mod tidy
-          cat go.sum
+          git diff --exit-code -- go.mod go.sum
       - run: go test ./...
       - run: go vet ./...
       - run: docker compose config --quiet
