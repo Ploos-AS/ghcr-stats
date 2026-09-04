@@ -27,6 +27,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p data
+          sudo chown 1000:1000 data
           trap 'docker compose logs ghcr-stats || true; docker compose down -v || true' EXIT
           docker compose up -d --pull never
 
