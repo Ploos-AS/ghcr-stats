@@ -37,13 +37,15 @@ GHCR_STATS_GITHUB_TOKEN=github_pat_...
 GHCR_STATS_PACKAGES=
 ```
 
+For reliable organization-wide package discovery, use a token that can read package metadata. A classic personal access token with `read:packages` is the conservative choice. Do not assume a repository workflow's built-in `GITHUB_TOKEN` can enumerate all packages belonging to the organization.
+
 For secret-file deployments, use `GHCR_STATS_GITHUB_TOKEN_FILE` instead of putting the token directly in the environment.
 
 ```env
 GHCR_STATS_GITHUB_TOKEN_FILE=/run/secrets/github_token
 ```
 
-The discovery request asks GitHub's organization Packages API for public `container` packages. Discovery runs before each normal collection cycle, so newly published containers enter the monitored package set automatically.
+The discovery request asks GitHub's organization Packages API for `container` packages and retains public packages from the response. Discovery runs before each normal collection cycle, so newly published containers enter the monitored package set automatically.
 
 If discovery fails, the service retains its last known/fallback package set and reports the error through the package/org APIs and `ghcr_stats_discovery_up`. A non-empty `GHCR_STATS_PACKAGES` value is an explicit override and disables automatic discovery.
 
