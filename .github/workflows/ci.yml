@@ -30,3 +30,46 @@ jobs:
       - run: docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t ghcr-stats:ci .
       - name: Verify non-root
         run: test "$(docker run --rm --entrypoint id ghcr-stats:ci -u)" = "1000"
+      - name: Runtime API and badge qualification
+        run: |
+          set -euxo pipefail
+          docker volume create ghcr-stats-ci-data
+          docker run -d --name ghcr-stats-ci \
+            -p 18080:8080 \
+            -e GHCR_STATS_OWNER=Ploos-AS \
+            -e GHCR_STATS_PACKAGES=soju \
+            -e GHCR_STATS_INTERVAL=1h \
+            -v ghcr-stats-ci-data:/data \
+            ghcr-stats:ci
+          trap 'docker logs ghcr-stats-ci || true; docker rm -f ghcr-stats-ci || true; docker volume rm ghcr-stats-ci-data || true' EXIT
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/healthz | grep -qx ok; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18080/healthz | grep -qx ok
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/api/v1/packages/soju > /tmp/soju.json; then
+              break
+            fi
+            sleep 1
+          done
+          grep -q '"package":"soju"' /tmp/soju.json
+          grep -Eq '"downloads":[0-9]+' /tmp/soju.json
+
+          curl -fsS http://127.0.0.1:18080/badge/soju/pulls.svg > /tmp/soju.svg
+          grep -q '<svg' /tmp/soju.svg
+          grep -q 'GHCR pulls' /tmp/soju.svg
+
+          curl -fsS http://127.0.0.1:18080/api/v1/badge/soju/pulls > /tmp/shields.json
+          grep -q '"schemaVersion":1' /tmp/shields.json
+
+          curl -fsS http://127.0.0.1:18080/api/v1/org > /tmp/org.json
+          grep -Eq '"downloads":[0-9]+' /tmp/org.json
+
+          curl -fsS http://127.0.0.1:18080/metrics > /tmp/metrics.txt
+          grep -q 'ghcr_downloads_total' /tmp/metrics.txt
+          grep -q 'ghcr_org_downloads_total' /tmp/metrics.txt
