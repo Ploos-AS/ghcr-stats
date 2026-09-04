@@ -94,7 +94,9 @@ func TestM55EventFiltersAndInvalidCursor(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("filter status=%d body=%s", rr.Code, rr.Body.String())
 	}
-	var got struct{ Events []Event `json:"events"` }
+	var got struct {
+		Events []Event `json:"events"`
+	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
