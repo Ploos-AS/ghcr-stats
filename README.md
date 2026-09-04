@@ -215,3 +215,19 @@ GET /api/v1/org/export?format=csv&period=30d
 
 CSV responses use the columns `owner,package,period,timestamp,downloads,delta` and are returned as downloadable attachments. Export endpoints are read-only (`GET` only).
 
+
+
+### Readiness and observability (M4.4)
+
+`/healthz` remains a pure liveness endpoint. `/readyz` is a stricter readiness endpoint: the SQLite database must be reachable, at least one package must be configured, and at least one package must have a non-stale snapshot. A collector failure does not make the service unready while usable fresh cached data still exists. `/readyz` returns `200` when ready and `503` otherwise, and supports `GET` and `HEAD`.
+
+Additional Prometheus gauges are exported from `/metrics`:
+
+- `ghcr_stats_info{version,revision}`
+- `ghcr_stats_ready{owner}`
+- `ghcr_stats_database_up{owner}`
+- `ghcr_stats_packages_with_data{owner}`
+- `ghcr_stats_fresh_packages{owner}`
+- `ghcr_stats_stale_packages{owner}`
+- `ghcr_stats_stale_after_seconds{owner}`
+- `ghcr_stats_process_uptime_seconds`

@@ -17,12 +17,12 @@ func newM44TestApp(t *testing.T) *App {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	return &App{
-		cfg: Config{Owner: "Ploos-AS", Packages: []string{"pkg"}, Interval: time.Hour},
-		store: store,
-		collector: GitHubHTMLCollector{Client: http.DefaultClient},
-		packages: []string{"pkg"},
+		cfg:           Config{Owner: "Ploos-AS", Packages: []string{"pkg"}, Interval: time.Hour},
+		store:         store,
+		collector:     GitHubHTMLCollector{Client: http.DefaultClient},
+		packages:      []string{"pkg"},
 		packageSource: "explicit",
-		lastErr: map[string]string{},
+		lastErr:       map[string]string{},
 	}
 }
 

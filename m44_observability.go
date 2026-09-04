@@ -9,12 +9,12 @@ import (
 var processStartedAt = time.Now().UTC()
 
 type readinessStatus struct {
-	Ready        bool
-	DatabaseUp   bool
-	Packages     int
-	WithData     int
-	Fresh        int
-	Stale        int
+	Ready      bool
+	DatabaseUp bool
+	Packages   int
+	WithData   int
+	Fresh      int
+	Stale      int
 }
 
 func (a *App) readiness(now time.Time) readinessStatus {

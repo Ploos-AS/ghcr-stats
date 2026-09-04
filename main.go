@@ -209,6 +209,7 @@ func (a *App) loop(ctx context.Context) {
 func (a *App) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok\n")) })
+	mux.HandleFunc("/readyz", a.handleReadyz)
 	mux.HandleFunc("/version", handleVersion)
 	mux.HandleFunc("/api/v1/health", a.handleHealthJSON)
 	mux.HandleFunc("/api/v1/packages", a.handlePackageList)
@@ -294,6 +295,7 @@ func (a *App) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "ghcr_stats_discovery_up{owner=%q} 1\n", a.cfg.Owner)
 	}
 	a.writeCollectorHealthMetrics(w)
+	a.writeM44Metrics(w)
 	a.writeM23Metrics(w)
 	a.writeM1Metrics(w)
 }
