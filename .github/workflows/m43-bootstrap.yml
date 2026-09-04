@@ -1,0 +1,41 @@
+name: M4.3 bootstrap
+on:
+  push:
+    branches: [main]
+    paths: [m43_export.go]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-go@v5
+        with: {go-version: '1.24.x'}
+      - name: Integrate export routes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('main.go'); s=p.read_text()
+          s=s.replace('mux.HandleFunc("/api/v1/org/history", a.handleOrgHistory)', 'mux.HandleFunc("/api/v1/org/history", a.handleOrgHistory)\n\tmux.HandleFunc("/api/v1/org/export", a.handleOrgExport)')
+          p.write_text(s)
+          p=Path('m3.go'); s=p.read_text()
+          old='''\tif len(parts) == 2 && parts[1] == "history" {
+\t\ta.handlePackageHistory(w, r, parts[0])
+\t\treturn
+\t}'''
+          new=old+'''\n\tif len(parts) == 2 && parts[1] == "export" {\n\t\ta.handlePackageExport(w, r, parts[0])\n\t\treturn\n\t}'''
+          if old not in s: raise SystemExit('package route anchor missing')
+          s=s.replace(old,new,1); p.write_text(s)
+          PY
+          gofmt -w main.go m3.go m43_export.go
+          go test ./...
+          go vet ./...
+      - name: Commit integration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add main.go m3.go m43_export.go
+          git commit -m 'Integrate M4.3 history exports'
+          git push origin HEAD:main
