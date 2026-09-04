@@ -28,9 +28,15 @@ jobs:
         run: go test -run TestGitHubHTMLCollectorLive -v .
       - name: Live GHCR package discovery
         env:
-          GHCR_LIVE_DISCOVERY_TEST: '1'
-          GITHUB_TOKEN: ${{ github.token }}
-        run: go test -run TestGitHubPackagesDiscovererLive -v .
+          GHCR_STATS_DISCOVERY_TOKEN: ${{ secrets.GHCR_STATS_DISCOVERY_TOKEN }}
+        run: |
+          if [ -z "$GHCR_STATS_DISCOVERY_TOKEN" ]; then
+            echo "::notice::Skipping live package discovery; GHCR_STATS_DISCOVERY_TOKEN is not configured"
+            exit 0
+          fi
+          GHCR_LIVE_DISCOVERY_TEST=1 \
+          GHCR_STATS_GITHUB_TOKEN="$GHCR_STATS_DISCOVERY_TOKEN" \
+            go test -run TestGitHubPackagesDiscovererLive -v .
       - run: go vet ./...
       - run: docker compose config --quiet
       - run: docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t ghcr-stats:ci .
