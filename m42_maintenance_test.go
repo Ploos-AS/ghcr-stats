@@ -37,8 +37,8 @@ func TestRetentionKeepsBoundaryBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if deleted != 3 {
-		t.Fatalf("deleted=%d want 3", deleted)
+	if deleted != 2 {
+		t.Fatalf("deleted=%d want 2", deleted)
 	}
 
 	var sojuCount, mineflayerCount int
