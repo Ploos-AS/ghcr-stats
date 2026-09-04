@@ -1,0 +1,115 @@
+name: M4.3 export qualification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Unit qualification
+        run: |
+          gofmt_check="$(gofmt -l -- *.go)"
+          test -z "$gofmt_check" || { printf '%s\n' "$gofmt_check"; exit 1; }
+          go test ./...
+          go vet ./...
+      - name: Seed deterministic history
+        run: |
+          mkdir -p data
+          python3 - <<'PY'
+          import datetime
+          import sqlite3
+          db = sqlite3.connect('data/ghcr-stats.db')
+          db.executescript('''
+          CREATE TABLE snapshots (package TEXT NOT NULL, downloads INTEGER NOT NULL, collected_at TEXT NOT NULL);
+          CREATE INDEX idx_snapshots_pkg_time ON snapshots(package, collected_at);
+          ''')
+          now = datetime.datetime.now(datetime.timezone.utc)
+          rows = [
+              ('soju', 100, now - datetime.timedelta(days=2)),
+              ('mineflayer', 50, now - datetime.timedelta(hours=42)),
+              ('soju', 130, now - datetime.timedelta(days=1)),
+              ('mineflayer', 70, now - datetime.timedelta(hours=18)),
+          ]
+          db.executemany('INSERT INTO snapshots(package,downloads,collected_at) VALUES(?,?,?)', [(p,d,t.isoformat().replace('+00:00','Z')) for p,d,t in rows])
+          db.commit()
+          db.close()
+          PY
+          sudo chown -R 1000:1000 data
+      - name: Build local image
+        run: docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t ghcr-stats:m43 .
+      - name: Qualify JSON and CSV exports
+        run: |
+          set -euxo pipefail
+          trap 'docker logs ghcr-stats-m43 || true; docker rm -f ghcr-stats-m43 || true' EXIT
+          docker run -d --name ghcr-stats-m43 \
+            -p 18080:8080 \
+            -v "$PWD/data:/data" \
+            -e GHCR_STATS_OWNER=Ploos-AS \
+            -e GHCR_STATS_PACKAGES=soju,mineflayer \
+            -e GHCR_STATS_INTERVAL=1h \
+            ghcr-stats:m43
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:18080/healthz | grep -qx ok && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18080/healthz | grep -qx ok
+
+          curl -fsS 'http://127.0.0.1:18080/api/v1/packages/soju/export?format=json&period=all' > package.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('package.json'))
+          assert d['owner']=='Ploos-AS'
+          assert d['package']=='soju'
+          assert d['period']=='all'
+          assert len(d['points']) >= 2
+          assert d['points'][0]['downloads'] == 100
+          PY
+
+          curl -fsS -D package.headers 'http://127.0.0.1:18080/api/v1/packages/soju/export?format=csv&period=all' -o package.csv
+          grep -qi '^Content-Type: text/csv' package.headers
+          grep -qi 'Content-Disposition: attachment; filename="ghcr-stats-soju-all.csv"' package.headers
+          python3 - <<'PY'
+          import csv
+          rows=list(csv.reader(open('package.csv')))
+          assert rows[0] == ['owner','package','period','timestamp','downloads','delta']
+          assert rows[1][0:3] == ['Ploos-AS','soju','all']
+          assert rows[1][4] == '100'
+          PY
+
+          curl -fsS 'http://127.0.0.1:18080/api/v1/org/export?format=json&period=all' > org.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('org.json'))
+          assert d['owner']=='Ploos-AS'
+          assert d['package']==''
+          assert d['period']=='all'
+          assert len(d['points']) >= 4
+          assert max(p['downloads'] for p in d['points']) >= 200
+          PY
+
+          curl -fsS -D org.headers 'http://127.0.0.1:18080/api/v1/org/export?format=csv&period=all' -o org.csv
+          grep -qi '^Content-Type: text/csv' org.headers
+          grep -qi 'Content-Disposition: attachment; filename="ghcr-stats-org-all.csv"' org.headers
+          python3 - <<'PY'
+          import csv
+          rows=list(csv.reader(open('org.csv')))
+          assert rows[0] == ['owner','package','period','timestamp','downloads','delta']
+          assert rows[1][0] == 'Ploos-AS'
+          assert rows[1][1] == ''
+          assert rows[1][2] == 'all'
+          PY
+
+          test "$(curl -sS -o /dev/null -w '%{http_code}' 'http://127.0.0.1:18080/api/v1/packages/soju/export?format=xml&period=all')" = 400
+          test "$(curl -sS -o /dev/null -w '%{http_code}' 'http://127.0.0.1:18080/api/v1/org/export?format=json&period=banana')" = 400
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST 'http://127.0.0.1:18080/api/v1/packages/soju/export?format=json&period=all')" = 405
+          test "$(curl -sS -o /dev/null -w '%{http_code}' 'http://127.0.0.1:18080/api/v1/packages/unknown/export?format=json&period=all')" = 404
