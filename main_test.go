@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,4 +40,21 @@ func TestLoadConfigDefaults(t *testing.T) {
 func TestBadgeSVG(t *testing.T) {
 	s := badgeSVG("GHCR pulls", "1.2k")
 	if !strings.Contains(s, "<svg") || !strings.Contains(s, "1.2k") { t.Fatal("bad svg") }
+}
+
+func TestGitHubHTMLCollectorLive(t *testing.T) {
+	if os.Getenv("GHCR_LIVE_TEST") != "1" {
+		t.Skip("set GHCR_LIVE_TEST=1 to exercise GitHub's public package pages")
+	}
+	collector := GitHubHTMLCollector{Client: &http.Client{Timeout: 25 * time.Second}}
+	for _, pkg := range []string{"soju", "mineflayer"} {
+		t.Run(pkg, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			count, err := collector.Collect(ctx, "Ploos-AS", pkg)
+			if err != nil { t.Fatalf("collect %s: %v", pkg, err) }
+			if count < 0 { t.Fatalf("negative download count for %s: %d", pkg, count) }
+			t.Logf("%s downloads=%d", pkg, count)
+		})
+	}
 }
