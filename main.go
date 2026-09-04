@@ -215,6 +215,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/v1/packages/", a.handlePackageAPI)
 	mux.HandleFunc("/api/v1/rankings", a.handleRankings)
 	mux.HandleFunc("/api/v1/org/history", a.handleOrgHistory)
+	mux.HandleFunc("/api/v1/org/export", a.handleOrgExport)
 	mux.HandleFunc("/api/v1/org", a.handleOrgJSON)
 	mux.HandleFunc("/api/v1/badge/", a.handleShields)
 	mux.HandleFunc("/badge/", a.handleM1Badge)

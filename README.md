@@ -200,3 +200,18 @@ The first usable statistic appears after a successful collection. Historical per
 ## Caveat
 
 The `github-html` collector parses GitHub's public package HTML because GitHub does not provide pull/download counts through its supported Packages API. HTML can change without notice. The parser deliberately accepts only the package statistics card labelled `Total downloads`; unrelated generic `N downloads` text is rejected. Collection failures do not delete existing history, and collector health/stale-data surfaces are intended to make parser drift or upstream breakage visible.
+
+
+### History export (M4.3)
+
+History can be exported as JSON or CSV with the same period semantics as the analytics API (`24h`, `7d`, `30d`, `90d`, `all`):
+
+```text
+GET /api/v1/packages/{package}/export?format=json&period=30d
+GET /api/v1/packages/{package}/export?format=csv&period=30d
+GET /api/v1/org/export?format=json&period=30d
+GET /api/v1/org/export?format=csv&period=30d
+```
+
+CSV responses use the columns `owner,package,period,timestamp,downloads,delta` and are returned as downloadable attachments. Export endpoints are read-only (`GET` only).
+

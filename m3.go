@@ -214,6 +214,10 @@ func (a *App) handlePackageAPI(w http.ResponseWriter, r *http.Request) {
 		a.handlePackageHistory(w, r, parts[0])
 		return
 	}
+	if len(parts) == 2 && parts[1] == "export" {
+		a.handlePackageExport(w, r, parts[0])
+		return
+	}
 	if len(parts) == 1 && parts[0] != "" {
 		a.handleJSON(w, r)
 		return
