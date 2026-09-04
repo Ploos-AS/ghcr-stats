@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -42,6 +43,9 @@ func (s *Store) initEventSchema() error {
 }
 
 func (s *Store) SaveEvent(e Event) (int64, error) {
+	if err := s.initEventSchema(); err != nil {
+		return 0, err
+	}
 	if e.CreatedAt.IsZero() {
 		e.CreatedAt = time.Now().UTC()
 	}
@@ -60,6 +64,9 @@ func (s *Store) SaveEvent(e Event) (int64, error) {
 }
 
 func (s *Store) Events(pkg, typ, severity string, limit int) ([]Event, error) {
+	if err := s.initEventSchema(); err != nil {
+		return nil, err
+	}
 	if limit <= 0 {
 		limit = 100
 	}
@@ -107,6 +114,9 @@ func (s *Store) Events(pkg, typ, severity string, limit int) ([]Event, error) {
 }
 
 func (s *Store) EventCount() (int64, error) {
+	if err := s.initEventSchema(); err != nil {
+		return 0, err
+	}
 	var n int64
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM events`).Scan(&n)
 	return n, err
@@ -114,8 +124,21 @@ func (s *Store) EventCount() (int64, error) {
 
 func (a *App) emitEvent(e Event) {
 	e.Owner = a.cfg.Owner
+	if e.CreatedAt.IsZero() {
+		e.CreatedAt = time.Now().UTC()
+	}
 	if _, err := a.store.SaveEvent(e); err != nil {
 		fmt.Printf("save event %s: %v\n", e.Type, err)
+		return
+	}
+	if sender, err := runtimeWebhookSender(); err != nil {
+		fmt.Printf("webhook config: %v\n", err)
+	} else if sender.Enabled() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := sender.Deliver(ctx, e); err != nil {
+			fmt.Printf("deliver event %s: %v\n", e.Type, err)
+		}
 	}
 }
 
