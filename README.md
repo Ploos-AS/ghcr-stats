@@ -17,6 +17,8 @@ This keeps the package inventory on a supported API while isolating the best-eff
 - explicit package-list override when desired
 - periodic pull/download collection
 - collector health and stale-data detection
+- collection error counters and consecutive-failure tracking
+- organization-level health aggregation
 - SQLite history in `/data`
 - Prometheus `/metrics`
 - package and organization JSON APIs
@@ -56,11 +58,15 @@ A package is considered stale when its newest successful snapshot is older than 
 
 Collection failures never delete the last successful snapshot. Instead, the previous statistics remain available while health surfaces report the failure.
 
-`/api/v1/health` reports all packages. To inspect one package:
+`/api/v1/health` reports all packages plus an organization summary. To inspect one package:
 
 ```text
 /api/v1/health?package=soju
 ```
+
+Per-package health includes `up`, `stale`, `last_success`, `last_error`, `total_failures`, and `consecutive_failures`. A successful collection resets `consecutive_failures` to zero while preserving the lifetime in-process failure counter.
+
+The organization summary reports `healthy`/`degraded`, healthy and unhealthy package counts, stale packages, failing packages, total failures, and current consecutive failures. `/healthz` remains a process/liveness endpoint and is intentionally not failed by transient collector problems.
 
 Package JSON also contains `collector_up`, `stale`, `last_success`, and `last_error`.
 
@@ -113,6 +119,15 @@ Per package collector health:
 - `ghcr_stats_snapshot_stale`
 - `ghcr_stats_last_success_timestamp_seconds`
 - `ghcr_stats_snapshot_age_seconds`
+- `ghcr_stats_collection_errors_total`
+- `ghcr_stats_consecutive_failures`
+
+Organization health:
+
+- `ghcr_stats_org_healthy`
+- `ghcr_stats_org_unhealthy_packages`
+- `ghcr_stats_org_stale_packages`
+- `ghcr_stats_org_failing_packages`
 
 Organization totals:
 
@@ -124,6 +139,8 @@ Discovery/service state:
 
 - `ghcr_stats_packages`
 - `ghcr_stats_discovery_up`
+
+Example alerting can use `ghcr_stats_consecutive_failures >= 3`, `ghcr_stats_snapshot_stale == 1`, or `ghcr_stats_org_healthy == 0` without coupling external dependency health to the container's liveness probe.
 
 ## Run
 
