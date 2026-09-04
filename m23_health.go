@@ -93,6 +93,7 @@ func (a *App) writeM23Metrics(w http.ResponseWriter) {
 	a.writeM51Metrics(w)
 	a.writeM52Metrics(w)
 	a.writeM53Metrics(w)
+	a.writeM54Metrics(w)
 }
 
 func (a *App) handleOrgHealthJSON(w http.ResponseWriter, r *http.Request) {
