@@ -31,20 +31,20 @@ func TestPackageSummary(t *testing.T) {
 	a := testM1App(t)
 	s, err := a.packageSummary("soju")
 	if err != nil { t.Fatal(err) }
-	if s.Downloads != 150 || s.Downloads7d != 0 || s.Downloads30d != 30 { t.Fatalf("%+v", s) }
+	if s.Downloads != 150 || s.Downloads7d != 30 || s.Downloads30d != 50 { t.Fatalf("%+v", s) }
 }
 
 func TestOrgSummary(t *testing.T) {
 	a := testM1App(t)
 	s := a.orgSummary()
-	if s.Downloads != 380 || s.Downloads7d != 0 || s.Downloads30d != 50 { t.Fatalf("%+v", s) }
+	if s.Downloads != 380 || s.Downloads7d != 50 || s.Downloads30d != 80 { t.Fatalf("%+v", s) }
 }
 
 func TestBadgeAndShieldsEndpoints(t *testing.T) {
 	a := testM1App(t)
 	r := httptest.NewRequest("GET", "/badge/org/pulls-30d.svg", nil)
 	w := httptest.NewRecorder(); a.handleM1Badge(w, r)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "50") { t.Fatalf("%d %s", w.Code, w.Body.String()) }
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "80") { t.Fatalf("%d %s", w.Code, w.Body.String()) }
 
 	r = httptest.NewRequest("GET", "/api/v1/badge/soju/pulls", nil)
 	w = httptest.NewRecorder(); a.handleShields(w, r)
