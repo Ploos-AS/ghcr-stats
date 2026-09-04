@@ -17,9 +17,9 @@ This keeps the package inventory on a supported API while isolating the best-eff
 - explicit package-list override when desired
 - periodic pull/download collection
 - collector health and stale-data detection
-- collection error counters and consecutive-failure tracking
+- persistent collection error counters and consecutive-failure tracking
 - organization-level health aggregation
-- SQLite history in `/data`
+- SQLite history and collector state in `/data`
 - Prometheus `/metrics`
 - package and organization JSON APIs
 - built-in SVG badges
@@ -64,7 +64,9 @@ Collection failures never delete the last successful snapshot. Instead, the prev
 /api/v1/health?package=soju
 ```
 
-Per-package health includes `up`, `stale`, `last_success`, `last_error`, `total_failures`, and `consecutive_failures`. A successful collection resets `consecutive_failures` to zero while preserving the lifetime in-process failure counter.
+Per-package health includes `up`, `stale`, `last_success`, `last_error`, `total_failures`, and `consecutive_failures`. A successful collection resets `consecutive_failures` to zero while preserving the lifetime failure counter.
+
+Failure counters and the latest collector error are stored in the same SQLite database as the snapshots, so health state survives container and process restarts as long as `/data` is persistent.
 
 The organization summary reports `healthy`/`degraded`, healthy and unhealthy package counts, stale packages, failing packages, total failures, and current consecutive failures. `/healthz` remains a process/liveness endpoint and is intentionally not failed by transient collector problems.
 
