@@ -1,0 +1,86 @@
+name: M4.4 observability qualification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  observability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Unit qualification
+        run: |
+          gofmt_check="$(gofmt -l -- *.go)"
+          test -z "$gofmt_check" || { printf '%s\n' "$gofmt_check"; exit 1; }
+          go test ./...
+          go vet ./...
+      - name: Build local image
+        run: docker build --build-arg VERSION=ci-m44 --build-arg REVISION="$GITHUB_SHA" -t ghcr-stats:m44 .
+      - name: Qualify readiness and metrics
+        run: |
+          set -euxo pipefail
+          mkdir -p data
+          sudo chown 1000:1000 data
+          cleanup() { docker rm -f ghcr-stats-m44 >/dev/null 2>&1 || true; }
+          trap 'docker logs ghcr-stats-m44 || true; cleanup' EXIT
+
+          docker run -d --name ghcr-stats-m44 \
+            -p 18080:8080 \
+            -v "$PWD/data:/data" \
+            -e GHCR_STATS_OWNER=Ploos-AS \
+            -e GHCR_STATS_PACKAGES=seeded-package \
+            -e GHCR_STATS_INTERVAL=1h \
+            ghcr-stats:m44
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:18080/healthz | grep -qx ok && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18080/healthz | grep -qx ok
+          test "$(curl -sS -o ready.before -w '%{http_code}' http://127.0.0.1:18080/readyz)" = 503
+          grep -q '^not ready$' ready.before
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18080/readyz)" = 405
+          cleanup
+
+          sudo python3 - <<'PY'
+          import datetime
+          import sqlite3
+          db=sqlite3.connect('data/ghcr-stats.db')
+          now=datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00','Z')
+          db.execute('INSERT INTO snapshots(package,downloads,collected_at) VALUES(?,?,?)', ('seeded-package', 42, now))
+          db.commit()
+          db.close()
+          PY
+          sudo chown -R 1000:1000 data
+
+          docker run -d --name ghcr-stats-m44 \
+            -p 18080:8080 \
+            -v "$PWD/data:/data" \
+            -e GHCR_STATS_OWNER=Ploos-AS \
+            -e GHCR_STATS_PACKAGES=seeded-package \
+            -e GHCR_STATS_INTERVAL=1h \
+            ghcr-stats:m44
+          for i in $(seq 1 30); do
+            test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/readyz || true)" = 200 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18080/readyz > ready.after
+          grep -q '^ready$' ready.after
+          curl -fsSI http://127.0.0.1:18080/readyz >/dev/null
+
+          curl -fsS http://127.0.0.1:18080/metrics > metrics.txt
+          grep -q 'ghcr_stats_info{version="ci-m44",revision=' metrics.txt
+          grep -q 'ghcr_stats_ready{owner="Ploos-AS"} 1' metrics.txt
+          grep -q 'ghcr_stats_database_up{owner="Ploos-AS"} 1' metrics.txt
+          grep -q 'ghcr_stats_packages_with_data{owner="Ploos-AS"} 1' metrics.txt
+          grep -q 'ghcr_stats_fresh_packages{owner="Ploos-AS"} 1' metrics.txt
+          grep -q 'ghcr_stats_stale_packages{owner="Ploos-AS"} 0' metrics.txt
+          grep -q 'ghcr_stats_stale_after_seconds{owner="Ploos-AS"} 10800' metrics.txt
+          grep -q '^ghcr_stats_process_uptime_seconds ' metrics.txt
