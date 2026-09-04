@@ -8,11 +8,13 @@ import (
 )
 
 type CollectorHealth struct {
-	Package     string    `json:"package"`
-	Up          bool      `json:"up"`
-	Stale       bool      `json:"stale"`
-	LastSuccess time.Time `json:"last_success,omitempty"`
-	LastError   string    `json:"last_error,omitempty"`
+	Package             string    `json:"package"`
+	Up                  bool      `json:"up"`
+	Stale               bool      `json:"stale"`
+	LastSuccess         time.Time `json:"last_success,omitempty"`
+	LastError           string    `json:"last_error,omitempty"`
+	TotalFailures       uint64    `json:"total_failures"`
+	ConsecutiveFailures uint64    `json:"consecutive_failures"`
 }
 
 func (a *App) staleAfter() time.Duration {
@@ -41,6 +43,9 @@ func (a *App) collectorHealth(pkg string, now time.Time) CollectorHealth {
 	if h.LastError != "" {
 		h.Up = false
 	}
+	fs := a.failureStats(pkg)
+	h.TotalFailures = fs.Total
+	h.ConsecutiveFailures = fs.Consecutive
 	return h
 }
 
@@ -51,11 +56,17 @@ func (a *App) handleHealthJSON(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(a.collectorHealth(pkg, time.Now().UTC()))
 		return
 	}
+	now := time.Now().UTC()
 	items := make([]CollectorHealth, 0, len(a.packageNames()))
 	for _, name := range a.packageNames() {
-		items = append(items, a.collectorHealth(name, time.Now().UTC()))
+		items = append(items, a.collectorHealth(name, now))
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"collector": a.collector.Name(), "stale_after_seconds": int64(a.staleAfter().Seconds()), "packages": items})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"collector":           a.collector.Name(),
+		"stale_after_seconds": int64(a.staleAfter().Seconds()),
+		"org":                 a.orgHealth(now),
+		"packages":            items,
+	})
 }
 
 func (a *App) writeCollectorHealthMetrics(w http.ResponseWriter) {
@@ -63,9 +74,13 @@ func (a *App) writeCollectorHealthMetrics(w http.ResponseWriter) {
 	for _, pkg := range a.packageNames() {
 		h := a.collectorHealth(pkg, now)
 		up := 0
-		if h.Up { up = 1 }
+		if h.Up {
+			up = 1
+		}
 		stale := 0
-		if h.Stale { stale = 1 }
+		if h.Stale {
+			stale = 1
+		}
 		fmt.Fprintf(w, "ghcr_stats_collector_up{owner=%q,package=%q} %d\n", a.cfg.Owner, pkg, up)
 		fmt.Fprintf(w, "ghcr_stats_snapshot_stale{owner=%q,package=%q} %d\n", a.cfg.Owner, pkg, stale)
 		if !h.LastSuccess.IsZero() {
