@@ -3,6 +3,7 @@ package main
 import (
 	"html/template"
 	"strings"
+	"time"
 )
 
 var dashboardTemplateM32 = template.Must(template.New("dashboard-m32").Funcs(template.FuncMap{"compact": compact}).Parse(`<!doctype html>
