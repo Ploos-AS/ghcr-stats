@@ -1,0 +1,59 @@
+name: M3.1 patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m31-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace org history handler
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('m3.go')
+          s = p.read_text()
+          start = s.index('func (a *App) handleOrgHistory')
+          end = s.index('var dashboardTemplate', start)
+          replacement = '''func (a *App) handleOrgHistory(w http.ResponseWriter, r *http.Request) {
+          \tif r.URL.Path != "/api/v1/org/history" {
+          \t\thttp.NotFound(w, r)
+          \t\treturn
+          \t}
+          \td, period, err := parsePeriod(r.URL.Query().Get("period"))
+          \tif err != nil {
+          \t\thttp.Error(w, err.Error(), http.StatusBadRequest)
+          \t\treturn
+          \t}
+          \tsince := time.Time{}
+          \tif d > 0 {
+          \t\tsince = time.Now().UTC().Add(-d)
+          \t}
+          \tpoints, err := a.store.OrgHistory(a.packageNames(), since)
+          \tif err != nil {
+          \t\thttp.Error(w, "organization history query failed", http.StatusInternalServerError)
+          \t\treturn
+          \t}
+          \tw.Header().Set("Content-Type", "application/json")
+          \t_ = json.NewEncoder(w).Encode(map[string]any{"owner": a.cfg.Owner, "period": period, "points": points})
+          }
+
+          '''
+          p.write_text(s[:start] + replacement + s[end:])
+          PY
+          gofmt -w -- m3.go m31_org_history.go m31_org_history_test.go
+          go test ./...
+      - name: Commit M3.1 patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add m3.go m31_org_history.go m31_org_history_test.go
+          git commit -m 'Use carry-forward aggregation for org history'
+          git push origin HEAD:main
