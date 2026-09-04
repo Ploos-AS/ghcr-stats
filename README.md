@@ -16,6 +16,7 @@ This keeps the package inventory on a supported API while isolating the best-eff
 - automatic discovery of public GHCR container packages
 - explicit package-list override when desired
 - periodic pull/download collection
+- collector health and stale-data detection
 - SQLite history in `/data`
 - Prometheus `/metrics`
 - package and organization JSON APIs
@@ -49,10 +50,25 @@ The discovery request asks GitHub's organization Packages API for `container` pa
 
 If discovery fails, the service retains its last known/fallback package set and reports the error through the package/org APIs and `ghcr_stats_discovery_up`. A non-empty `GHCR_STATS_PACKAGES` value is an explicit override and disables automatic discovery.
 
+## Collector health
+
+A package is considered stale when its newest successful snapshot is older than three configured collection intervals. With the default six-hour interval, the stale threshold is 18 hours. A minimum threshold of three hours is used for shorter test/development intervals.
+
+Collection failures never delete the last successful snapshot. Instead, the previous statistics remain available while health surfaces report the failure.
+
+`/api/v1/health` reports all packages. To inspect one package:
+
+```text
+/api/v1/health?package=soju
+```
+
+Package JSON also contains `collector_up`, `stale`, `last_success`, and `last_error`.
+
 ## Endpoints
 
 - `/healthz`
 - `/metrics`
+- `/api/v1/health`
 - `/api/v1/packages`
 - `/api/v1/packages/<package>`
 - `/api/v1/org`
@@ -84,12 +100,19 @@ The JSON badge endpoints implement the Shields custom endpoint schema:
 
 ## Prometheus metrics
 
-Per package:
+Per package statistics:
 
 - `ghcr_downloads_total`
 - `ghcr_downloads_7d`
 - `ghcr_downloads_30d`
 - `ghcr_snapshot_timestamp_seconds`
+
+Per package collector health:
+
+- `ghcr_stats_collector_up`
+- `ghcr_stats_snapshot_stale`
+- `ghcr_stats_last_success_timestamp_seconds`
+- `ghcr_stats_snapshot_age_seconds`
 
 Organization totals:
 
@@ -116,4 +139,4 @@ The first usable statistic appears after a successful collection. Historical 7/3
 
 ## Caveat
 
-The `github-html` collector parses GitHub's public package HTML because GitHub does not provide pull/download counts through its supported Packages API. HTML can change without notice. Collection failures do not delete existing history.
+The `github-html` collector parses GitHub's public package HTML because GitHub does not provide pull/download counts through its supported Packages API. HTML can change without notice. Collection failures do not delete existing history; collector health and stale-data metrics are intended to make such breakage visible.
