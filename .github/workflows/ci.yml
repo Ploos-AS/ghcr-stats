@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - run: go test ./...
+      - run: go vet ./...
+      - run: docker compose config --quiet
+      - run: docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t ghcr-stats:ci .
+      - name: Verify non-root
+        run: test "$(docker run --rm --entrypoint id ghcr-stats:ci -u)" = "1000"
