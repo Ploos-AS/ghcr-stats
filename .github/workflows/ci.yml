@@ -21,6 +21,10 @@ jobs:
           go mod tidy
           git diff --exit-code -- go.mod go.sum
       - run: go test ./...
+      - name: Live GHCR collector smoke test
+        env:
+          GHCR_LIVE_TEST: '1'
+        run: go test -run TestGitHubHTMLCollectorLive -v .
       - run: go vet ./...
       - run: docker compose config --quiet
       - run: docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t ghcr-stats:ci .
