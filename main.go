@@ -224,6 +224,7 @@ func (a *App) loop(ctx context.Context) {
 func (a *App) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok\n")) })
+	mux.HandleFunc("/version", handleVersion)
 	mux.HandleFunc("/api/v1/health", a.handleHealthJSON)
 	mux.HandleFunc("/api/v1/packages", a.handlePackageList)
 	mux.HandleFunc("/api/v1/packages/", a.handleJSON)
@@ -400,6 +401,6 @@ func main() {
 
 	go app.loop(context.Background())
 	srv := &http.Server{Addr: cfg.Listen, Handler: app.routes(), ReadHeaderTimeout: 5 * time.Second}
-	log.Printf("ghcr-stats listening on %s for %s (%d initial packages, source=%s)", cfg.Listen, cfg.Owner, len(cfg.Packages), app.packageSource)
+	log.Printf("ghcr-stats %s (%s) listening on %s for %s (%d initial packages, source=%s)", version, revision, cfg.Listen, cfg.Owner, len(cfg.Packages), app.packageSource)
 	log.Fatal(srv.ListenAndServe())
 }
