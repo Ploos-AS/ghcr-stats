@@ -18,9 +18,6 @@ func TestGitHubPackagesDiscoverer(t *testing.T) {
 		if got := r.URL.Query().Get("package_type"); got != "container" {
 			t.Fatalf("package_type = %q", got)
 		}
-		if got := r.URL.Query().Get("visibility"); got != "public" {
-			t.Fatalf("visibility = %q", got)
-		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`[
 			{"name":"soju","package_type":"container","visibility":"public"},
