@@ -92,3 +92,60 @@ jobs:
           grep -q 'ghcr_org_downloads_total' /tmp/metrics.txt
           grep -q 'ghcr_stats_packages' /tmp/metrics.txt
           grep -q 'ghcr_stats_discovery_up' /tmp/metrics.txt
+      - name: Container restart persistence qualification
+        run: |
+          set -euxo pipefail
+          volume=ghcr-stats-ci-restart-data
+          container=ghcr-stats-ci-restart
+          package=ghcr-stats-ci-definitely-missing-package
+
+          docker volume create "$volume"
+          trap 'docker logs "$container" || true; docker rm -f "$container" || true; docker volume rm "$volume" || true' EXIT
+
+          start_container() {
+            docker run -d --name "$container" \
+              -p 18081:8080 \
+              -e GHCR_STATS_OWNER=Ploos-AS \
+              -e GHCR_STATS_PACKAGES="$package" \
+              -e GHCR_STATS_INTERVAL=1h \
+              -v "$volume":/data \
+              ghcr-stats:ci
+          }
+
+          wait_for_failure_count() {
+            expected="$1"
+            for i in $(seq 1 30); do
+              if curl -fsS "http://127.0.0.1:18081/api/v1/health?package=$package" > /tmp/restart-health.json; then
+                count=$(python3 -c 'import json; print(json.load(open("/tmp/restart-health.json"))["total_failures"])')
+                consecutive=$(python3 -c 'import json; print(json.load(open("/tmp/restart-health.json"))["consecutive_failures"])')
+                if [ "$count" -ge "$expected" ] && [ "$consecutive" -ge "$expected" ]; then
+                  return 0
+                fi
+              fi
+              sleep 1
+            done
+            cat /tmp/restart-health.json || true
+            return 1
+          }
+
+          start_container
+          wait_for_failure_count 1
+          first_total=$(python3 -c 'import json; print(json.load(open("/tmp/restart-health.json"))["total_failures"])')
+          first_consecutive=$(python3 -c 'import json; print(json.load(open("/tmp/restart-health.json"))["consecutive_failures"])')
+          test "$first_total" -eq 1
+          test "$first_consecutive" -eq 1
+          grep -q '"last_error"' /tmp/restart-health.json
+
+          docker rm -f "$container"
+
+          start_container
+          wait_for_failure_count 2
+          second_total=$(python3 -c 'import json; print(json.load(open("/tmp/restart-health.json"))["total_failures"])')
+          second_consecutive=$(python3 -c 'import json; print(json.load(open("/tmp/restart-health.json"))["consecutive_failures"])')
+          test "$second_total" -eq 2
+          test "$second_consecutive" -eq 2
+          grep -q '"last_error"' /tmp/restart-health.json
+
+          curl -fsS http://127.0.0.1:18081/metrics > /tmp/restart-metrics.txt
+          grep -Eq 'ghcr_stats_collection_errors_total.* 2$' /tmp/restart-metrics.txt
+          grep -Eq 'ghcr_stats_consecutive_failures.* 2$' /tmp/restart-metrics.txt
