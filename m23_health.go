@@ -33,31 +33,7 @@ func (a *App) recordCollectionResult(pkg string, collectErr error) {
 		log.Printf("persist collection state %s: %v", pkg, dbErr)
 		return
 	}
-	if collectErr != nil && before.Consecutive == 0 {
-		a.emitEvent(Event{
-			Type:      "collector_failed",
-			Severity:  "error",
-			Package:   pkg,
-			Message:   collectErr.Error(),
-			CreatedAt: at,
-			Metadata: map[string]any{
-				"previous_consecutive_failures": before.Consecutive,
-			},
-		})
-		return
-	}
-	if collectErr == nil && before.Consecutive > 0 {
-		a.emitEvent(Event{
-			Type:      "collector_recovered",
-			Severity:  "info",
-			Package:   pkg,
-			Message:   "collector recovered",
-			CreatedAt: at,
-			Metadata: map[string]any{
-				"previous_consecutive_failures": before.Consecutive,
-			},
-		})
-	}
+	a.reconcileM52(pkg, collectErr, before, at)
 }
 
 func (a *App) failureStats(pkg string) failureCounter {
@@ -114,6 +90,7 @@ func (a *App) writeM23Metrics(w http.ResponseWriter) {
 	fmt.Fprintf(w, "ghcr_stats_org_failing_packages{owner=%q} %d\n", a.cfg.Owner, org.FailingPackages)
 	a.writeM50Metrics(w)
 	a.writeM51Metrics(w)
+	a.writeM52Metrics(w)
 }
 
 func (a *App) handleOrgHealthJSON(w http.ResponseWriter, r *http.Request) {
