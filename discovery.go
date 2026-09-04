@@ -67,7 +67,7 @@ func (d GitHubPackagesDiscoverer) Discover(ctx context.Context, owner string) ([
 		}
 		req.Header.Set("Accept", "application/vnd.github+json")
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(d.Token))
-		req.Header.Set("X-GitHub-Api-Version", "2026-03-10")
+		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 		req.Header.Set("User-Agent", "Ploos-AS-ghcr-stats/0.2")
 
 		resp, err := d.Client.Do(req)
