@@ -37,6 +37,13 @@ func (a *App) collectorHealth(pkg string, now time.Time) CollectorHealth {
 
 	fs := a.failureStats(pkg)
 	h.LastError = fs.LastError
+	// Keep the older in-memory state as a compatibility/failure fallback.
+	// Persistent SQLite state is authoritative whenever it contains an error.
+	if h.LastError == "" {
+		a.mu.RLock()
+		h.LastError = a.lastErr[pkg]
+		a.mu.RUnlock()
+	}
 	if h.LastError != "" || fs.Consecutive > 0 {
 		h.Up = false
 	}
