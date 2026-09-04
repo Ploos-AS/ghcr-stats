@@ -8,7 +8,9 @@ services:
     environment:
       GHCR_STATS_OWNER: ${GHCR_STATS_OWNER:-Ploos-AS}
       GHCR_STATS_INTERVAL: ${GHCR_STATS_INTERVAL:-6h}
-      GHCR_STATS_PACKAGES: ${GHCR_STATS_PACKAGES:-nmap-zenmap,red-discordbot,limnoria,sopel,cloudbot,yagpdb,mineflayer,minecraft-console-client,soju,soju-web,psotnic}
+      GHCR_STATS_PACKAGES: ${GHCR_STATS_PACKAGES:-}
+      GHCR_STATS_GITHUB_TOKEN: ${GHCR_STATS_GITHUB_TOKEN:-}
+      GHCR_STATS_GITHUB_TOKEN_FILE: ${GHCR_STATS_GITHUB_TOKEN_FILE:-}
     volumes:
       - ./data:/data
     read_only: true
