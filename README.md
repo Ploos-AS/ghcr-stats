@@ -16,7 +16,12 @@ This keeps the package inventory on a supported API while isolating the best-eff
 - automatic discovery of public GHCR container packages
 - explicit package-list override when desired
 - periodic pull/download collection
-- collector health and stale-data detection
+- historical analytics for 24h, 7d, 30d, 90d and all-time periods
+- package and organization history APIs
+- package rankings by period
+- built-in read-only web dashboard and package detail pages
+- dependency-free Canvas history graphs
+- collector health and stale-data detection integrated into APIs and UI
 - persistent collection error counters and consecutive-failure tracking
 - organization-level health aggregation
 - SQLite history and collector state in `/data`
@@ -24,11 +29,20 @@ This keeps the package inventory on a supported API while isolating the best-eff
 - package and organization JSON APIs
 - built-in SVG badges
 - Shields.io-compatible JSON badge API
-- 7-day and 30-day deltas
 - non-root OCI image
 - Docker Compose
 - amd64 + arm64 release workflow
 - SBOM and provenance
+
+## Dashboard
+
+The built-in dashboard is served by the same Go binary as the API.
+
+- `/` shows organization totals, period deltas, a period-selectable organization history graph, package rankings and health state.
+- `/package/<package>` shows package totals, collector health and a period-selectable package history graph.
+- supported dashboard periods are `24h`, `7d`, `30d`, `90d` and `all`.
+
+No Node.js, npm, React or external chart library is required. The dashboard uses server-rendered HTML plus the browser Canvas API.
 
 ## Package discovery
 
@@ -74,18 +88,37 @@ Package JSON also contains `collector_up`, `stale`, `last_success`, and `last_er
 
 ## Endpoints
 
+Core and health:
+
 - `/healthz`
+- `/version`
 - `/metrics`
 - `/api/v1/health`
 - `/api/v1/packages`
 - `/api/v1/packages/<package>`
 - `/api/v1/org`
+
+Historical analytics:
+
+- `/api/v1/packages/<package>/history?period=24h|7d|30d|90d|all`
+- `/api/v1/org/history?period=24h|7d|30d|90d|all`
+- `/api/v1/rankings?period=24h|7d|30d|90d|all`
+
+Dashboard:
+
+- `/`
+- `/package/<package>?period=24h|7d|30d|90d|all`
+
+Badges:
+
 - `/api/v1/badge/<package|org>/<pulls|pulls-7d|pulls-30d>`
 - `/badge/<package|org>/pulls.svg`
 - `/badge/<package|org>/pulls-7d.svg`
 - `/badge/<package|org>/pulls-30d.svg`
 
 `/api/v1/packages` reports the active package set and whether it came from `github-api`, `explicit`, or `fallback` configuration.
+
+Package JSON includes `downloads`, `downloads_24h`, `downloads_7d`, `downloads_30d`, `downloads_90d` and collector health fields.
 
 Examples:
 
@@ -105,6 +138,14 @@ The JSON badge endpoints implement the Shields custom endpoint schema:
   "color": "2ea44f"
 }
 ```
+
+## Historical semantics
+
+For bounded periods, a package delta uses the newest snapshot at or before the period boundary as its baseline. If no baseline exists yet, the delta is zero rather than an invented increase. Counter regressions also produce zero delta.
+
+Organization history uses carry-forward aggregation. At each organization history timestamp, ghcr-stats carries forward the most recent known snapshot for every package instead of requiring all packages to have snapshots at identical timestamps. For bounded periods, the series starts with an explicit period-boundary baseline when prior package state exists.
+
+The `all` period uses the first stored snapshot as baseline for package ranking and includes all stored history points.
 
 ## Prometheus metrics
 
@@ -154,8 +195,8 @@ docker compose up -d
 
 For automatic discovery, add a suitable GitHub token to `.env`. Without one, ghcr-stats keeps a built-in fallback list so the service remains usable.
 
-The first usable statistic appears after a successful collection. Historical 7/30-day deltas become meaningful only after enough snapshots have accumulated. For each period, the baseline is the newest snapshot at or before the period boundary. If no such baseline exists yet, that package contributes zero to the period delta rather than an invented increase.
+The first usable statistic appears after a successful collection. Historical period deltas become meaningful only after enough snapshots have accumulated.
 
 ## Caveat
 
-The `github-html` collector parses GitHub's public package HTML because GitHub does not provide pull/download counts through its supported Packages API. HTML can change without notice. Collection failures do not delete existing history; collector health and stale-data metrics are intended to make such breakage visible.
+The `github-html` collector parses GitHub's public package HTML because GitHub does not provide pull/download counts through its supported Packages API. HTML can change without notice. The parser deliberately accepts only the package statistics card labelled `Total downloads`; unrelated generic `N downloads` text is rejected. Collection failures do not delete existing history, and collector health/stale-data surfaces are intended to make parser drift or upstream breakage visible.
