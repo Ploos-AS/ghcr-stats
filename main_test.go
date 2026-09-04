@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -9,6 +10,13 @@ import (
 	"testing"
 	"time"
 )
+
+type errorCollector struct{ err error }
+
+func (errorCollector) Name() string { return "error-test" }
+func (c errorCollector) Collect(context.Context, string, string) (int64, error) {
+	return 0, c.err
+}
 
 func TestCompact(t *testing.T) {
 	if compact(1234) != "1.2k" {
@@ -45,6 +53,59 @@ func TestDownloadPatternsSupportReverseMarkupOrder(t *testing.T) {
 	m := downloadsPatterns[1].FindStringSubmatch(html)
 	if len(m) != 2 || m[1] != "4,321" {
 		t.Fatalf("%#v", m)
+	}
+}
+
+func TestParseDownloadCountAcceptsObservedZero(t *testing.T) {
+	count, err := parseDownloadCount(`<h3 title="0">0</h3><span>Total downloads</span>`)
+	if err != nil {
+		t.Fatalf("parse zero: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("want observed zero, got %d", count)
+	}
+}
+
+func TestParseDownloadCountReturnsUnavailableForMissingTotal(t *testing.T) {
+	count, err := parseDownloadCount(`<div>0 downloads</div>`)
+	if count != 0 {
+		t.Fatalf("unexpected count %d", count)
+	}
+	if !errors.Is(err, ErrDownloadCountUnavailable) {
+		t.Fatalf("want ErrDownloadCountUnavailable, got %v", err)
+	}
+}
+
+func TestCollectionFailureNeverPersistsFalseZero(t *testing.T) {
+	s, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	previous := PackageStat{Package: "soju", Downloads: 77, UpdatedAt: time.Now().UTC().Add(-time.Hour)}
+	if err := s.Save(previous); err != nil {
+		t.Fatal(err)
+	}
+
+	a := &App{
+		cfg:       Config{Owner: "Ploos-AS", PackagesExplicit: true},
+		store:     s,
+		collector: errorCollector{err: ErrDownloadCountUnavailable},
+		packages:  []string{"soju"},
+		lastErr:   map[string]string{},
+	}
+	a.collectAll(context.Background())
+
+	latest, err := s.Latest("soju")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.Downloads != 77 || !latest.UpdatedAt.Equal(previous.UpdatedAt) {
+		t.Fatalf("collector failure changed last good snapshot: %#v", latest)
+	}
+	if got := a.failureStats("soju"); got.Consecutive != 1 || got.Total != 1 || got.LastError == "" {
+		t.Fatalf("failure state not recorded: %#v", got)
 	}
 }
 
