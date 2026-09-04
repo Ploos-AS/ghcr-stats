@@ -11,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,11 +45,6 @@ type GitHubHTMLCollector struct{ Client *http.Client }
 
 func (GitHubHTMLCollector) Name() string { return "github-html" }
 
-var downloadsPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)([0-9][0-9,._ ]*)\s+downloads?`),
-	regexp.MustCompile(`(?i)downloads?[^0-9]{0,40}([0-9][0-9,._ ]*)`),
-}
-
 func (c GitHubHTMLCollector) Collect(ctx context.Context, owner, pkg string) (int64, error) {
 	u := fmt.Sprintf("https://github.com/orgs/%s/packages/container/package/%s", owner, pkg)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -71,16 +65,7 @@ func (c GitHubHTMLCollector) Collect(ctx context.Context, owner, pkg string) (in
 		return 0, err
 	}
 	text := html.UnescapeString(string(b))
-	for _, re := range downloadsPatterns {
-		m := re.FindStringSubmatch(text)
-		if len(m) == 2 {
-			n := strings.NewReplacer(",", "", ".", "", "_", "", " ", "").Replace(m[1])
-			if v, err := strconv.ParseInt(n, 10, 64); err == nil {
-				return v, nil
-			}
-		}
-	}
-	return 0, errors.New("download count not found on GitHub package page")
+	return parseDownloadCount(text)
 }
 
 type Store struct{ db *sql.DB }
@@ -90,7 +75,7 @@ func OpenStore(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS snapshots (package TEXT NOT NULL, downloads INTEGER NOT NULL, collected_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS idx_snapshots_pkg_time ON snapshots(package, collected_at);`); err != nil {
+	if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS snapshots (package TEXT NOT NULL, downloads INTEGER NOT NULL, collected_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS idx_snapshots_pkg_time ON snapshots(package, collected_at);` + collectionStateSchema); err != nil {
 		db.Close()
 		return nil, err
 	}

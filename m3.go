@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"net/http"
 	"sort"
 	"strconv"
@@ -284,16 +283,6 @@ func (a *App) handleOrgHistory(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"owner": a.cfg.Owner, "period": period, "points": points})
 }
-
-var dashboardTemplate = template.Must(template.New("dashboard").Funcs(template.FuncMap{"compact": compact}).Parse(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ghcr-stats</title>
-<style>body{font-family:system-ui,sans-serif;margin:0;background:#0d1117;color:#e6edf3}main{max-width:1100px;margin:auto;padding:28px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.card,table{background:#161b22;border:1px solid #30363d;border-radius:8px}.card{padding:16px}.big{font-size:1.7rem;font-weight:700}table{width:100%;border-collapse:collapse;margin-top:20px;overflow:hidden}th,td{text-align:left;padding:11px;border-bottom:1px solid #30363d}a{color:#58a6ff;text-decoration:none}.ok{color:#3fb950}.bad{color:#f85149}.muted{color:#8b949e}</style></head><body><main>
-<h1>{{.Owner}} GHCR stats</h1><p class="muted">Historical analytics from periodic GHCR snapshots.</p>
-<div class="cards"><div class="card"><div class="muted">Total</div><div class="big">{{compact .Org.Downloads}}</div></div><div class="card"><div class="muted">24h</div><div class="big">+{{compact .Org.Downloads24h}}</div></div><div class="card"><div class="muted">7d</div><div class="big">+{{compact .Org.Downloads7d}}</div></div><div class="card"><div class="muted">30d</div><div class="big">+{{compact .Org.Downloads30d}}</div></div><div class="card"><div class="muted">90d</div><div class="big">+{{compact .Org.Downloads90d}}</div></div></div>
-<table><thead><tr><th>#</th><th>Package</th><th>30d</th><th>Total</th><th>Health</th></tr></thead><tbody>{{range .Rankings}}<tr><td>{{.Rank}}</td><td><a href="/package/{{.Package}}">{{.Package}}</a></td><td>+{{compact .Delta}}</td><td>{{compact .Downloads}}</td><td>{{if .CollectorUp}}{{if .Stale}}<span class="bad">stale</span>{{else}}<span class="ok">healthy</span>{{end}}{{else}}<span class="bad">collector error</span>{{end}}</td></tr>{{end}}</tbody></table>
-</main></body></html>`))
-
-var packageTemplate = template.Must(template.New("package").Funcs(template.FuncMap{"compact": compact}).Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Summary.Package}} · ghcr-stats</title><style>body{font-family:system-ui,sans-serif;max-width:960px;margin:auto;padding:28px;background:#0d1117;color:#e6edf3}a{color:#58a6ff}.cards{display:flex;gap:12px;flex-wrap:wrap}.card{padding:14px;border:1px solid #30363d;background:#161b22;border-radius:8px;min-width:120px}.big{font-size:1.5rem;font-weight:700}canvas{width:100%;height:280px;background:#161b22;border:1px solid #30363d;border-radius:8px;margin-top:20px}</style></head><body><a href="/">← overview</a><h1>{{.Summary.Package}}</h1><div class="cards"><div class="card"><div>Total</div><div class="big">{{compact .Summary.Downloads}}</div></div><div class="card"><div>24h</div><div class="big">+{{compact .Summary.Downloads24h}}</div></div><div class="card"><div>7d</div><div class="big">+{{compact .Summary.Downloads7d}}</div></div><div class="card"><div>30d</div><div class="big">+{{compact .Summary.Downloads30d}}</div></div><div class="card"><div>90d</div><div class="big">+{{compact .Summary.Downloads90d}}</div></div></div><p>Collector: {{if .Health.Up}}healthy{{else}}error{{end}} · stale: {{.Health.Stale}} · last success: {{.Health.LastSuccess}}</p><canvas id="chart" width="900" height="280"></canvas><script>fetch('/api/v1/packages/{{.Summary.Package}}/history?period=90d').then(r=>r.json()).then(d=>{const c=document.getElementById('chart'),x=c.getContext('2d'),p=d.points||[];if(p.length<2)return;const vals=p.map(v=>v.downloads),min=Math.min(...vals),max=Math.max(...vals),span=Math.max(1,max-min);x.strokeStyle='#58a6ff';x.lineWidth=2;x.beginPath();p.forEach((v,i)=>{const px=20+i*(c.width-40)/(p.length-1),py=c.height-20-(v.downloads-min)*(c.height-40)/span;i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke()})</script></body></html>`))
 
 func (a *App) handleM3Index(w http.ResponseWriter, r *http.Request) {
 	period := normalizeDashboardPeriod(r.URL.Query().Get("period"))

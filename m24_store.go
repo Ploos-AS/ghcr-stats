@@ -13,15 +13,7 @@ const collectionStateSchema = `CREATE TABLE IF NOT EXISTS collection_state (
 	last_attempt_at TEXT NOT NULL DEFAULT ''
 );`
 
-func (s *Store) ensureCollectionState() error {
-	_, err := s.db.Exec(collectionStateSchema)
-	return err
-}
-
 func (s *Store) RecordCollectionResult(pkg string, collectErr error, at time.Time) error {
-	if err := s.ensureCollectionState(); err != nil {
-		return err
-	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -57,9 +49,6 @@ func (s *Store) RecordCollectionResult(pkg string, collectErr error, at time.Tim
 }
 
 func (s *Store) CollectionFailureStats(pkg string) (failureCounter, error) {
-	if err := s.ensureCollectionState(); err != nil {
-		return failureCounter{}, err
-	}
 	var st failureCounter
 	err := s.db.QueryRow(`SELECT total_failures, consecutive_failures, last_error FROM collection_state WHERE package=?`, pkg).Scan(&st.Total, &st.Consecutive, &st.LastError)
 	if err == sql.ErrNoRows {
