@@ -1,0 +1,57 @@
+name: M4.5 release readiness
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Verify v0.3.0 ancestry
+        run: |
+          git fetch --tags --force
+          git merge-base --is-ancestor v0.3.0 HEAD
+          test "$(git rev-list --count HEAD..v0.3.0)" = "0"
+          test "$(git rev-list --count v0.3.0..HEAD)" -gt "0"
+      - name: Verify release documentation
+        run: |
+          test -f docs/M4_SPEC.md
+          test -f docs/M4_1_DEPLOYMENT.md
+          test -f docs/M4_2_MAINTENANCE.md
+          test -f docs/M4_3_EXPORT.md
+          test -f docs/M4_4_OBSERVABILITY.md
+          test -f docs/M4_5_RELEASE_READINESS.md
+      - name: Verify permanent runtime gates
+        run: |
+          test -f .github/workflows/ci.yml
+          test -f .github/workflows/m3-runtime.yml
+          test -f .github/workflows/m41-deployment.yml
+          test -f .github/workflows/m42-maintenance.yml
+          test -f .github/workflows/m43-export.yml
+          test -f .github/workflows/m44-observability.yml
+      - name: Reject temporary integration helpers
+        run: |
+          test ! -e .github/workflows/m44-integrate.yml
+          test ! -e scripts/m44_integrate.py
+      - name: Go qualification
+        run: |
+          test -z "$(gofmt -l . --exclude vendor 2>/dev/null || true)" || {
+            files=$(gofmt -l $(find . -name '*.go' -not -path './vendor/*'))
+            test -z "$files"
+          }
+          go test ./...
+          go vet ./...
+      - name: Compose validation
+        run: docker compose config >/dev/null
