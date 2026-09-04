@@ -3,14 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
-	"sync"
 	"time"
 )
 
 type failureCounter struct {
 	Total       uint64 `json:"total_failures"`
 	Consecutive uint64 `json:"consecutive_failures"`
+	LastError   string `json:"last_error,omitempty"`
 }
 
 type OrgHealth struct {
@@ -25,33 +26,19 @@ type OrgHealth struct {
 	ConsecutiveFailures uint64 `json:"consecutive_failures"`
 }
 
-var collectionFailureState = struct {
-	sync.RWMutex
-	byApp map[*App]map[string]failureCounter
-}{byApp: make(map[*App]map[string]failureCounter)}
-
 func (a *App) recordCollectionResult(pkg string, err error) {
-	collectionFailureState.Lock()
-	defer collectionFailureState.Unlock()
-	m := collectionFailureState.byApp[a]
-	if m == nil {
-		m = make(map[string]failureCounter)
-		collectionFailureState.byApp[a] = m
+	if dbErr := a.store.RecordCollectionResult(pkg, err, time.Now().UTC()); dbErr != nil {
+		log.Printf("persist collection state %s: %v", pkg, dbErr)
 	}
-	st := m[pkg]
-	if err != nil {
-		st.Total++
-		st.Consecutive++
-	} else {
-		st.Consecutive = 0
-	}
-	m[pkg] = st
 }
 
 func (a *App) failureStats(pkg string) failureCounter {
-	collectionFailureState.RLock()
-	defer collectionFailureState.RUnlock()
-	return collectionFailureState.byApp[a][pkg]
+	st, err := a.store.CollectionFailureStats(pkg)
+	if err != nil {
+		log.Printf("read collection state %s: %v", pkg, err)
+		return failureCounter{}
+	}
+	return st
 }
 
 func (a *App) orgHealth(now time.Time) OrgHealth {
