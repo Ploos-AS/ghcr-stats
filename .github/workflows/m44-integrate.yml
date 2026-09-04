@@ -1,0 +1,37 @@
+name: M4.4 integrate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - m44_observability.go
+      - m44_observability_test.go
+      - scripts/m44_integrate.py
+      - .github/workflows/m44-integrate.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Apply integration
+        run: |
+          python3 scripts/m44_integrate.py
+          gofmt -w main.go m44_observability.go m44_observability_test.go
+          go test ./...
+          go vet ./...
+      - name: Commit integration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add main.go README.md m44_observability.go m44_observability_test.go
+          git commit -m 'Integrate M4.4 readiness and observability'
+          git push origin HEAD:main
