@@ -1,0 +1,20 @@
+services:
+  ghcr-stats:
+    image: ghcr.io/ploos-as/ghcr-stats:latest
+    container_name: ghcr-stats
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      GHCR_STATS_OWNER: ${GHCR_STATS_OWNER:-Ploos-AS}
+      GHCR_STATS_INTERVAL: ${GHCR_STATS_INTERVAL:-6h}
+      GHCR_STATS_PACKAGES: ${GHCR_STATS_PACKAGES:-nmap-zenmap,red-discordbot,limnoria,sopel,cloudbot,yagpdb,mineflayer,minecraft-console-client,soju,soju-web,psotnic}
+    volumes:
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
