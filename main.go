@@ -191,6 +191,7 @@ func (a *App) collectAll(ctx context.Context) {
 		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		count, err := a.collector.Collect(cctx, a.cfg.Owner, pkg)
 		cancel()
+		a.recordCollectionResult(pkg, err)
 		a.mu.Lock()
 		if err != nil {
 			a.lastErr[pkg] = err.Error()
@@ -317,6 +318,7 @@ func (a *App) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "ghcr_stats_discovery_up{owner=%q} 1\n", a.cfg.Owner)
 	}
 	a.writeCollectorHealthMetrics(w)
+	a.writeM23Metrics(w)
 	a.writeM1Metrics(w)
 }
 
