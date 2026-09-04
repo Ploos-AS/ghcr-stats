@@ -15,9 +15,9 @@ import (
 )
 
 type NotificationConfig struct {
-	AppriseURL   string
-	AppriseTag   string
-	BearerToken  string
+	AppriseURL  string
+	AppriseTag  string
+	BearerToken string
 }
 
 type apprisePayload struct {
