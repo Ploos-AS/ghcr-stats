@@ -1,0 +1,40 @@
+name: Bootstrap M5.5 event UI
+on:
+  push:
+    paths:
+      - .github/workflows/m55-ui-bootstrap.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Patch event panels
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('m32_dashboard.go')
+          s=p.read_text()
+          org_marker='</script></main></body></html>`))'
+          org_insert='''</script><section class="panel"><div class="top"><strong>Recent events</strong><a href="/api/v1/events?limit=50">JSON API</a></div><div id="recent-events" class="muted">loading…</div></section><script>function renderEvents(id,items){const el=document.getElementById(id);if(!items||!items.length){el.textContent='No events recorded yet.';return}el.innerHTML=items.map(e=>'<div style="padding:8px 0;border-bottom:1px solid #30363d"><strong>'+e.type+'</strong>'+(e.package?' · <a href="/package/'+encodeURIComponent(e.package)+'">'+e.package+'</a>':'')+' · '+new Date(e.created_at).toLocaleString()+(e.message?'<div class="muted">'+e.message.replaceAll('&','&amp;').replaceAll('<','&lt;')+'</div>':'')+'</div>').join('')}fetch('/api/v1/events?limit=10').then(r=>r.json()).then(d=>renderEvents('recent-events',d.events)).catch(()=>document.getElementById('recent-events').textContent='Events unavailable.');</script></main></body></html>`))'''
+          pkg_marker='</script></body></html>`))'
+          pkg_insert='''</script><section class="panel"><div class="top"><strong>Recent events</strong><a href="/api/v1/events?package={{.Summary.Package}}&limit=50">JSON API</a></div><div id="package-events" class="muted">loading…</div></section><script>fetch('/api/v1/events?package={{.Summary.Package}}&limit=10').then(r=>r.json()).then(d=>{const el=document.getElementById('package-events'),items=d.events||[];if(!items.length){el.textContent='No events recorded for this package.';return}el.innerHTML=items.map(e=>'<div style="padding:8px 0;border-bottom:1px solid #30363d"><strong>'+e.type+'</strong> · '+new Date(e.created_at).toLocaleString()+(e.message?'<div class="muted">'+e.message.replaceAll('&','&amp;').replaceAll('<','&lt;')+'</div>':'')+'</div>').join('')}).catch(()=>document.getElementById('package-events').textContent='Events unavailable.');</script></body></html>`))'''
+          if org_marker not in s or pkg_marker not in s:
+              raise SystemExit('expected dashboard markers not found')
+          s=s.replace(org_marker,org_insert,1).replace(pkg_marker,pkg_insert,1)
+          p.write_text(s)
+          PY
+          gofmt -w m32_dashboard.go m50_events.go
+          go test ./...
+          go vet ./...
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add m32_dashboard.go m50_events.go
+          git commit -m "Add M5.5 events dashboard UI"
+          git push origin HEAD:main
