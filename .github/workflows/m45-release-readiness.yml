@@ -47,10 +47,8 @@ jobs:
           test ! -e scripts/m44_integrate.py
       - name: Go qualification
         run: |
-          test -z "$(gofmt -l . --exclude vendor 2>/dev/null || true)" || {
-            files=$(gofmt -l $(find . -name '*.go' -not -path './vendor/*'))
-            test -z "$files"
-          }
+          files="$(find . -name '*.go' -not -path './vendor/*' -print0 | xargs -0 gofmt -l)"
+          test -z "$files"
           go test ./...
           go vet ./...
       - name: Compose validation
