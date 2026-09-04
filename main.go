@@ -223,6 +223,7 @@ func (a *App) loop(ctx context.Context) {
 func (a *App) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok\n")) })
+	mux.HandleFunc("/api/v1/health", a.handleHealthJSON)
 	mux.HandleFunc("/api/v1/packages", a.handlePackageList)
 	mux.HandleFunc("/api/v1/packages/", a.handleJSON)
 	mux.HandleFunc("/api/v1/org", a.handleOrgJSON)
@@ -275,8 +276,9 @@ func (a *App) handleJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	d7, _ := a.store.DeltaSince(pkg, time.Now().Add(-7*24*time.Hour))
 	d30, _ := a.store.DeltaSince(pkg, time.Now().Add(-30*24*time.Hour))
+	health := a.collectorHealth(pkg, time.Now().UTC())
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"package": st.Package, "downloads": st.Downloads, "downloads_week": d7, "downloads_month": d30, "updated_at": st.UpdatedAt, "collector": a.collector.Name()})
+	_ = json.NewEncoder(w).Encode(map[string]any{"package": st.Package, "downloads": st.Downloads, "downloads_week": d7, "downloads_month": d30, "updated_at": st.UpdatedAt, "collector": a.collector.Name(), "collector_up": health.Up, "stale": health.Stale, "last_success": health.LastSuccess, "last_error": health.LastError})
 }
 
 func compact(n int64) string {
@@ -314,6 +316,7 @@ func (a *App) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	} else {
 		fmt.Fprintf(w, "ghcr_stats_discovery_up{owner=%q} 1\n", a.cfg.Owner)
 	}
+	a.writeCollectorHealthMetrics(w)
 	a.writeM1Metrics(w)
 }
 
