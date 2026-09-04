@@ -57,7 +57,6 @@ func (d GitHubPackagesDiscoverer) Discover(ctx context.Context, owner string) ([
 		}
 		q := u.Query()
 		q.Set("package_type", "container")
-		q.Set("visibility", "public")
 		q.Set("per_page", "100")
 		q.Set("page", fmt.Sprintf("%d", page))
 		u.RawQuery = q.Encode()
