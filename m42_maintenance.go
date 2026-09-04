@@ -11,6 +11,18 @@ import (
 	"time"
 )
 
+func retentionDuration() time.Duration {
+	v := strings.TrimSpace(os.Getenv("GHCR_STATS_RETENTION"))
+	if v == "" || v == "0" {
+		return 0
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d < 24*time.Hour {
+		return 0
+	}
+	return d
+}
+
 func (s *Store) IntegrityCheck() error {
 	rows, err := s.db.Query("PRAGMA quick_check")
 	if err != nil {
@@ -211,8 +223,8 @@ func runMaintenanceCommand(cfg Config, args []string) (bool, error) {
 		if err := s.IntegrityCheck(); err != nil {
 			return true, err
 		}
-		if cfg.Retention > 0 {
-			if _, err := s.ApplyRetention(time.Now().UTC().Add(-cfg.Retention)); err != nil {
+		if retention := retentionDuration(); retention > 0 {
+			if _, err := s.ApplyRetention(time.Now().UTC().Add(-retention)); err != nil {
 				return true, err
 			}
 		}
