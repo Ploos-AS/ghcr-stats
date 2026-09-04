@@ -1,0 +1,57 @@
+name: M3 runtime
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build --build-arg VERSION=m3-ci --build-arg REVISION="$GITHUB_SHA" -t ghcr-stats:m3-ci .
+      - name: Qualify M3 dashboard and analytics APIs
+        run: |
+          set -euxo pipefail
+          docker volume create ghcr-stats-m3-data
+          docker run -d --name ghcr-stats-m3 \
+            -p 18083:8080 \
+            -e GHCR_STATS_OWNER=Ploos-AS \
+            -e GHCR_STATS_PACKAGES=soju \
+            -e GHCR_STATS_INTERVAL=1h \
+            -v ghcr-stats-m3-data:/data \
+            ghcr-stats:m3-ci
+          trap 'docker logs ghcr-stats-m3 || true; docker rm -f ghcr-stats-m3 || true; docker volume rm ghcr-stats-m3-data || true' EXIT
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18083/api/v1/packages/soju >/tmp/m3-package.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl -fsS http://127.0.0.1:18083/ > /tmp/m3-index.html
+          grep -q 'Ploos-AS GHCR stats' /tmp/m3-index.html
+          grep -q '/package/soju' /tmp/m3-index.html
+
+          curl -fsS http://127.0.0.1:18083/package/soju > /tmp/m3-detail.html
+          grep -q '<canvas' /tmp/m3-detail.html
+          grep -q 'soju' /tmp/m3-detail.html
+
+          curl -fsS 'http://127.0.0.1:18083/api/v1/rankings?period=30d' > /tmp/m3-ranking.json
+          grep -q '"period":"30d"' /tmp/m3-ranking.json
+          grep -q '"package":"soju"' /tmp/m3-ranking.json
+
+          curl -fsS 'http://127.0.0.1:18083/api/v1/packages/soju/history?period=90d' > /tmp/m3-history.json
+          grep -q '"period":"90d"' /tmp/m3-history.json
+          grep -q '"package":"soju"' /tmp/m3-history.json
+          grep -q '"points"' /tmp/m3-history.json
+
+          curl -fsS 'http://127.0.0.1:18083/api/v1/org/history?period=90d' > /tmp/m3-org-history.json
+          grep -q '"owner":"Ploos-AS"' /tmp/m3-org-history.json
+          grep -q '"period":"90d"' /tmp/m3-org-history.json
