@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -50,4 +51,28 @@ func TestGitHubPackagesDiscovererRequiresToken(t *testing.T) {
 	if _, err := d.Discover(context.Background(), "Ploos-AS"); err == nil {
 		t.Fatal("expected missing-token error")
 	}
+}
+
+func TestGitHubPackagesDiscovererLive(t *testing.T) {
+	if os.Getenv("GHCR_LIVE_DISCOVERY_TEST") != "1" {
+		t.Skip("set GHCR_LIVE_DISCOVERY_TEST=1 to exercise GitHub Packages API")
+	}
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		t.Fatal("GITHUB_TOKEN is required for live discovery test")
+	}
+	d := GitHubPackagesDiscoverer{
+		Client: &http.Client{Timeout: 25 * time.Second},
+		Token:  token,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pkgs, err := d.Discover(ctx, "Ploos-AS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pkgs) == 0 {
+		t.Fatal("no packages discovered")
+	}
+	t.Logf("discovered %d packages: %v", len(pkgs), pkgs)
 }
