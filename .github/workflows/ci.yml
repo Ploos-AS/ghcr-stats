@@ -21,6 +21,13 @@ jobs:
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
+      - name: Verify gofmt
+        run: |
+          unformatted="$(gofmt -l -- *.go)"
+          if [ -n "$unformatted" ]; then
+            printf 'gofmt required for:\n%s\n' "$unformatted"
+            exit 1
+          fi
       - run: go test ./...
       - name: Live GHCR collector smoke test
         env:
