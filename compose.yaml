@@ -3,6 +3,9 @@ services:
     image: ghcr.io/ploos-as/ghcr-stats:latest
     container_name: ghcr-stats
     restart: unless-stopped
+    user: "1000:1000"
+    stop_grace_period: 30s
+    pids_limit: 128
     ports:
       - "8080:8080"
     environment:
@@ -11,6 +14,8 @@ services:
       GHCR_STATS_PACKAGES: ${GHCR_STATS_PACKAGES:-}
       GHCR_STATS_GITHUB_TOKEN: ${GHCR_STATS_GITHUB_TOKEN:-}
       GHCR_STATS_GITHUB_TOKEN_FILE: ${GHCR_STATS_GITHUB_TOKEN_FILE:-}
+      GHCR_STATS_DB: ${GHCR_STATS_DB:-/data/ghcr-stats.db}
+      GHCR_STATS_LISTEN: ${GHCR_STATS_LISTEN:-:8080}
     volumes:
       - ./data:/data
     read_only: true
