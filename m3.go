@@ -289,6 +289,10 @@ func (a *App) handleOrgHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleM3Index(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/api/v1/events" {
+		a.handleEvents(w, r)
+		return
+	}
 	period := normalizeDashboardPeriod(r.URL.Query().Get("period"))
 	if r.URL.Path == "/" {
 		rankings, _ := a.rankings(period, time.Now().UTC())
