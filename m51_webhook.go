@@ -39,6 +39,13 @@ type WebhookSender struct {
 	lastOK time.Time
 }
 
+var runtimeWebhook struct {
+	sync.Mutex
+	sender *WebhookSender
+	key    string
+	err    error
+}
+
 func readSecretValue(valueEnv, fileEnv string) string {
 	if v := strings.TrimSpace(os.Getenv(valueEnv)); v != "" {
 		return v
@@ -67,6 +74,19 @@ func NewWebhookSender(cfg WebhookConfig) (*WebhookSender, error) {
 		return nil, errors.New("webhook URL must be an absolute http or https URL")
 	}
 	return &WebhookSender{cfg: cfg, client: &http.Client{Timeout: 10 * time.Second}}, nil
+}
+
+func runtimeWebhookSender() (*WebhookSender, error) {
+	cfg := loadWebhookConfig()
+	key := cfg.URL + "\x00" + cfg.Secret
+	runtimeWebhook.Lock()
+	defer runtimeWebhook.Unlock()
+	if runtimeWebhook.sender != nil && runtimeWebhook.key == key {
+		return runtimeWebhook.sender, runtimeWebhook.err
+	}
+	runtimeWebhook.sender, runtimeWebhook.err = NewWebhookSender(cfg)
+	runtimeWebhook.key = key
+	return runtimeWebhook.sender, runtimeWebhook.err
 }
 
 func (s *WebhookSender) Enabled() bool { return s != nil && s.cfg.URL != "" }
@@ -124,4 +144,24 @@ func (s *WebhookSender) Metrics() (ok, failed uint64, lastOK time.Time) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.ok, s.failed, s.lastOK
+}
+
+func (a *App) writeM51Metrics(w http.ResponseWriter) {
+	sender, err := runtimeWebhookSender()
+	if err != nil {
+		fmt.Fprintf(w, "ghcr_stats_webhook_config_valid{owner=%q} 0\n", a.cfg.Owner)
+		return
+	}
+	fmt.Fprintf(w, "ghcr_stats_webhook_config_valid{owner=%q} 1\n", a.cfg.Owner)
+	if !sender.Enabled() {
+		fmt.Fprintf(w, "ghcr_stats_webhook_enabled{owner=%q} 0\n", a.cfg.Owner)
+		return
+	}
+	fmt.Fprintf(w, "ghcr_stats_webhook_enabled{owner=%q} 1\n", a.cfg.Owner)
+	ok, failed, lastOK := sender.Metrics()
+	fmt.Fprintf(w, "ghcr_stats_webhook_deliveries_total{owner=%q,result=%q} %d\n", a.cfg.Owner, "success", ok)
+	fmt.Fprintf(w, "ghcr_stats_webhook_deliveries_total{owner=%q,result=%q} %d\n", a.cfg.Owner, "failure", failed)
+	if !lastOK.IsZero() {
+		fmt.Fprintf(w, "ghcr_stats_webhook_last_success_timestamp_seconds{owner=%q} %d\n", a.cfg.Owner, lastOK.Unix())
+	}
 }
