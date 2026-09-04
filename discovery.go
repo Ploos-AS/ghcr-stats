@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -28,6 +29,10 @@ type githubPackage struct {
 	Name        string `json:"name"`
 	PackageType string `json:"package_type"`
 	Visibility  string `json:"visibility"`
+}
+
+type githubAPIError struct {
+	Message string `json:"message"`
 }
 
 func (d GitHubPackagesDiscoverer) Discover(ctx context.Context, owner string) ([]string, error) {
@@ -70,16 +75,24 @@ func (d GitHubPackagesDiscoverer) Discover(ctx context.Context, owner string) ([
 		if err != nil {
 			return nil, err
 		}
-		var batch []githubPackage
-		decodeErr := json.NewDecoder(resp.Body).Decode(&batch)
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 		resp.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
 		if resp.StatusCode != http.StatusOK {
+			var apiErr githubAPIError
+			_ = json.Unmarshal(body, &apiErr)
+			if strings.TrimSpace(apiErr.Message) != "" {
+				return nil, fmt.Errorf("GitHub packages API returned %s: %s", resp.Status, apiErr.Message)
+			}
 			return nil, fmt.Errorf("GitHub packages API returned %s", resp.Status)
 		}
-		if decodeErr != nil {
-			return nil, decodeErr
-		}
 
+		var batch []githubPackage
+		if err := json.Unmarshal(body, &batch); err != nil {
+			return nil, err
+		}
 		for _, pkg := range batch {
 			name := strings.TrimSpace(pkg.Name)
 			if name == "" || pkg.PackageType != "container" {
