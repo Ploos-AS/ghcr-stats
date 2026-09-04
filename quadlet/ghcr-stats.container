@@ -1,0 +1,27 @@
+[Unit]
+Description=ghcr-stats GHCR statistics service
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/ploos-as/ghcr-stats:latest
+ContainerName=ghcr-stats
+AutoUpdate=registry
+PublishPort=8080:8080
+Volume=%h/.local/share/ghcr-stats:/data:Z
+EnvironmentFile=./ghcr-stats.env
+ReadOnly=true
+ReadOnlyTmpfs=true
+Tmpfs=/tmp:size=16m,mode=1777
+DropCapability=all
+NoNewPrivileges=true
+PidsLimit=128
+
+[Service]
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=900
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
