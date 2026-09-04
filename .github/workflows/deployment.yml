@@ -1,0 +1,56 @@
+name: Deployment qualification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deployment definitions
+        run: python3 scripts/validate_deployment.py
+
+      - name: Build local image
+        run: docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t ghcr.io/ploos-as/ghcr-stats:latest .
+
+      - name: Qualify hardened Compose runtime
+        env:
+          GHCR_STATS_PACKAGES: soju
+          GHCR_STATS_INTERVAL: 1h
+        run: |
+          set -euxo pipefail
+          mkdir -p data
+          trap 'docker compose logs ghcr-stats || true; docker compose down -v || true' EXIT
+          docker compose up -d --pull never
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz | grep -qx ok; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/healthz | grep -qx ok
+
+          cid=$(docker compose ps -q ghcr-stats)
+          test -n "$cid"
+          test "$(docker inspect "$cid" --format '{{.Config.User}}')" = "1000:1000"
+          test "$(docker inspect "$cid" --format '{{.HostConfig.ReadonlyRootfs}}')" = "true"
+          test "$(docker inspect "$cid" --format '{{.HostConfig.PidsLimit}}')" = "128"
+          docker inspect "$cid" --format '{{json .HostConfig.CapDrop}}' | grep -q 'ALL'
+          docker inspect "$cid" --format '{{json .HostConfig.SecurityOpt}}' | grep -q 'no-new-privileges:true'
+          docker inspect "$cid" --format '{{json .HostConfig.Tmpfs}}' | grep -q '"/tmp"'
+          test "$(docker inspect "$cid" --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}')" = "healthy" || {
+            for i in $(seq 1 20); do
+              status=$(docker inspect "$cid" --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}')
+              [ "$status" = healthy ] && break
+              sleep 1
+            done
+            test "$(docker inspect "$cid" --format '{{.State.Health.Status}}')" = "healthy"
+          }
