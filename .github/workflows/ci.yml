@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   validate:
@@ -25,6 +26,11 @@ jobs:
         env:
           GHCR_LIVE_TEST: '1'
         run: go test -run TestGitHubHTMLCollectorLive -v .
+      - name: Live GHCR package discovery
+        env:
+          GHCR_LIVE_DISCOVERY_TEST: '1'
+          GITHUB_TOKEN: ${{ github.token }}
+        run: go test -run TestGitHubPackagesDiscovererLive -v .
       - run: go vet ./...
       - run: docker compose config --quiet
       - run: docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t ghcr-stats:ci .
@@ -60,6 +66,10 @@ jobs:
           grep -q '"package":"soju"' /tmp/soju.json
           grep -Eq '"downloads":[0-9]+' /tmp/soju.json
 
+          curl -fsS http://127.0.0.1:18080/api/v1/packages > /tmp/packages.json
+          grep -q '"source":"explicit"' /tmp/packages.json
+          grep -q '"soju"' /tmp/packages.json
+
           curl -fsS http://127.0.0.1:18080/badge/soju/pulls.svg > /tmp/soju.svg
           grep -q '<svg' /tmp/soju.svg
           grep -q 'GHCR pulls' /tmp/soju.svg
@@ -69,7 +79,10 @@ jobs:
 
           curl -fsS http://127.0.0.1:18080/api/v1/org > /tmp/org.json
           grep -Eq '"downloads":[0-9]+' /tmp/org.json
+          grep -q '"package_source":"explicit"' /tmp/org.json
 
           curl -fsS http://127.0.0.1:18080/metrics > /tmp/metrics.txt
           grep -q 'ghcr_downloads_total' /tmp/metrics.txt
           grep -q 'ghcr_org_downloads_total' /tmp/metrics.txt
+          grep -q 'ghcr_stats_packages' /tmp/metrics.txt
+          grep -q 'ghcr_stats_discovery_up' /tmp/metrics.txt
