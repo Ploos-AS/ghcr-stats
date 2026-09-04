@@ -1,0 +1,147 @@
+name: M3.3 refactor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/m33-refactor.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply M3.3 cleanup
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # m3.go: remove obsolete pre-M3.2 templates and now-unused html/template import.
+          p = Path('m3.go')
+          s = p.read_text()
+          s = s.replace('\t"html/template"\n', '')
+          start = s.index('var dashboardTemplate =')
+          end = s.index('func (a *App) handleM3Index', start)
+          s = s[:start] + s[end:]
+          p.write_text(s)
+
+          # main.go: collector parser becomes explicit instead of init()-overridden legacy regexes.
+          p = Path('main.go')
+          s = p.read_text()
+          s = s.replace('\t"regexp"\n', '')
+          block_start = s.index('var downloadsPatterns =')
+          block_end = s.index('func (c GitHubHTMLCollector) Collect', block_start)
+          s = s[:block_start] + s[block_end:]
+          loop_start = s.index('\tfor _, re := range downloadsPatterns {', s.index('func (c GitHubHTMLCollector) Collect'))
+          loop_end_marker = '\treturn 0, errors.New("download count not found on GitHub package page")\n'
+          loop_end = s.index(loop_end_marker, loop_start) + len(loop_end_marker)
+          replacement = '\treturn parseDownloadCount(text)\n'
+          s = s[:loop_start] + replacement + s[loop_end:]
+
+          # Initialize all Store schema at open time.
+          old = 'if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS snapshots (package TEXT NOT NULL, downloads INTEGER NOT NULL, collected_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS idx_snapshots_pkg_time ON snapshots(package, collected_at);`); err != nil {'
+          new = 'if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS snapshots (package TEXT NOT NULL, downloads INTEGER NOT NULL, collected_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS idx_snapshots_pkg_time ON snapshots(package, collected_at);` + collectionStateSchema); err != nil {'
+          if old not in s:
+              raise SystemExit('OpenStore schema block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          # collector_harden.go: direct parser, no init side effects.
+          Path('collector_harden.go').write_text(r'''package main
+
+import (
+    "errors"
+    "regexp"
+    "strconv"
+    "strings"
+)
+
+var downloadsPatterns = []*regexp.Regexp{
+    regexp.MustCompile(`(?is)<h3[^>]*\btitle=["']([0-9][0-9,._ ]*)["'][^>]*>.*?</h3>.{0,1000}?<span[^>]*>\s*Total downloads\s*</span>`),
+    regexp.MustCompile(`(?is)<span[^>]*>\s*Total downloads\s*</span>.{0,1000}?<h3[^>]*\btitle=["']([0-9][0-9,._ ]*)["'][^>]*>`),
+}
+
+func parseDownloadCount(text string) (int64, error) {
+    for _, re := range downloadsPatterns {
+        m := re.FindStringSubmatch(text)
+        if len(m) != 2 {
+            continue
+        }
+        n := strings.NewReplacer(",", "", ".", "", "_", "", " ", "").Replace(m[1])
+        if v, err := strconv.ParseInt(n, 10, 64); err == nil {
+            return v, nil
+        }
+    }
+    return 0, errors.New("download count not found on GitHub package page")
+}
+''')
+
+          # m24_store.go: schema is guaranteed by OpenStore, so no lazy DDL on hot paths.
+          p = Path('m24_store.go')
+          s = p.read_text()
+          ensure = '''func (s *Store) ensureCollectionState() error {
+\t_, err := s.db.Exec(collectionStateSchema)
+\treturn err
+}
+
+'''
+          s = s.replace(ensure, '')
+          s = s.replace('''\tif err := s.ensureCollectionState(); err != nil {
+\t\treturn err
+\t}
+''', '', 1)
+          s = s.replace('''\tif err := s.ensureCollectionState(); err != nil {
+\t\treturn failureCounter{}, err
+\t}
+''', '', 1)
+          p.write_text(s)
+
+          # Focused regression tests for the refactor boundaries.
+          Path('m33_refactor_test.go').write_text(r'''package main
+
+import (
+    "path/filepath"
+    "testing"
+)
+
+func TestM33DownloadParserUsesTotalDownloadsCard(t *testing.T) {
+    good := `<h3 title="12,345">12.3k</h3><span>Total downloads</span>`
+    got, err := parseDownloadCount(good)
+    if err != nil || got != 12345 {
+        t.Fatalf("got=%d err=%v", got, err)
+    }
+    if _, err := parseDownloadCount(`<div>999 downloads</div>`); err == nil {
+        t.Fatal("generic downloads text must not be accepted")
+    }
+}
+
+func TestM33OpenStoreInitializesCollectionState(t *testing.T) {
+    s, err := OpenStore(filepath.Join(t.TempDir(), "m33.db"))
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer s.Close()
+    var name string
+    if err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='collection_state'`).Scan(&name); err != nil {
+        t.Fatal(err)
+    }
+    if name != "collection_state" {
+        t.Fatalf("unexpected table %q", name)
+    }
+}
+''')
+          PY
+          gofmt -w -- main.go m3.go collector_harden.go m24_store.go m33_refactor_test.go
+          test -z "$(gofmt -l .)"
+          go test ./...
+          go vet ./...
+      - name: Commit M3.3 cleanup
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add main.go m3.go collector_harden.go m24_store.go m33_refactor_test.go
+          git commit -m 'Refactor M3 analytics collector and store internals'
+          git push origin HEAD:main
