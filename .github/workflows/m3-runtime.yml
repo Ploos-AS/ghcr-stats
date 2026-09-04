@@ -35,13 +35,19 @@ jobs:
             sleep 1
           done
 
-          curl -fsS http://127.0.0.1:18083/ > /tmp/m3-index.html
+          curl -fsS 'http://127.0.0.1:18083/?period=7d' > /tmp/m3-index.html
           grep -q 'Ploos-AS GHCR stats' /tmp/m3-index.html
-          grep -q '/package/soju' /tmp/m3-index.html
+          grep -q '/package/soju?period=7d' /tmp/m3-index.html
+          grep -q 'Organization history · 7d' /tmp/m3-index.html
+          grep -q 'id="org-chart"' /tmp/m3-index.html
+          grep -q '/api/v1/org/history?period=' /tmp/m3-index.html
+          grep -q 'Not enough history yet' /tmp/m3-index.html
 
-          curl -fsS http://127.0.0.1:18083/package/soju > /tmp/m3-detail.html
+          curl -fsS 'http://127.0.0.1:18083/package/soju?period=24h' > /tmp/m3-detail.html
           grep -q '<canvas' /tmp/m3-detail.html
           grep -q 'soju' /tmp/m3-detail.html
+          grep -q 'History · 24h' /tmp/m3-detail.html
+          grep -q 'period=24h' /tmp/m3-detail.html
 
           curl -fsS 'http://127.0.0.1:18083/api/v1/rankings?period=30d' > /tmp/m3-ranking.json
           grep -q '"period":"30d"' /tmp/m3-ranking.json
