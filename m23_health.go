@@ -34,6 +34,7 @@ func (a *App) recordCollectionResult(pkg string, collectErr error) {
 		return
 	}
 	a.reconcileM52(pkg, collectErr, before, at)
+	a.observePackageLifecycle(at)
 }
 
 func (a *App) failureStats(pkg string) failureCounter {
@@ -91,6 +92,7 @@ func (a *App) writeM23Metrics(w http.ResponseWriter) {
 	a.writeM50Metrics(w)
 	a.writeM51Metrics(w)
 	a.writeM52Metrics(w)
+	a.writeM53Metrics(w)
 }
 
 func (a *App) handleOrgHealthJSON(w http.ResponseWriter, r *http.Request) {
