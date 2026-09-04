@@ -15,12 +15,63 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply M3.3 cleanup
-        env:
-          PATCH_B64: ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwID0gUGF0aCgibTMuZ28iKQpzID0gcC5yZWFkX3RleHQoKQpzID0gcy5yZXBsYWNlKCdcdCJodG1sL3RlbXBsYXRlIlxuJywgJycpCnN0YXJ0ID0gcy5pbmRleCgndmFyIGRhc2hib2FyZFRlbXBsYXRlID0nKQplbmQgPSBzLmluZGV4KCdmdW5jIChhICpBcHApIGhhbmRsZU0zSW5kZXgnLCBzdGFydCkKcyA9IHNbOnN0YXJ0XSArIHNbZW5kOl0KcC53cml0ZV90ZXh0KHMpCgpwID0gUGF0aCgibWFpbi5nbyIpCnMgPSBwLnJlYWRfdGV4dCgpCnMgPSBzLnJlcGxhY2UoJ1x0InJlZ2V4IlxuJywgJycpCmJsb2NrX3N0YXJ0ID0gcy5pbmRleCgndmFyIGRvd25sb2Fkc1BhdHRlcm5zID0nKQpibG9ja19lbmQgPSBzLmluZGV4KCdmdW5jIChjIEdpdEh1YkhUTUxDb2xsZWN0b3IpIENvbGxlY3QnLCBibG9ja19zdGFydCkKcyA9IHNbOmJsb2NrX3N0YXJ0XSArIHNbYmxvY2tfZW5kOl0KbG9vcF9zdGFydCA9IHMuaW5kZXgoJ1x0Zm9yIF8sIHJlIDo9IHJhbmdlIGRvd25sb2Fkc1BhdHRlcm5zIHsnLCBzLmluZGV4KCdmdW5jIChjIEdpdEh1YkhUTUxDb2xsZWN0b3IpIENvbGxlY3QnKSkKbG9vcF9lbmRfbWFya2VyID0gJ1x0cmV0dXJuIDAsIGVycm9ycy5OZXcoImRvd25sb2FkIGNvdW50IG5vdCBmb3VuZCBvbiBHaXRIdWIgcGFja2FnZSBwYWdlIilcbicKbG9vcF9lbmQgPSBzLmluZGV4KGxvb3BfZW5kX21hcmtlciwgbG9vcF9zdGFydCkgKyBsZW4obG9vcF9lbmRfbWFya2VyKQpzID0gc1s6bG9vcF9zdGFydF0gKyAnXHRyZXR1cm4gcGFyc2VEb3dubG9hZENvdW50KHRleHQpXG4nICsgc1tsb29wX2VuZDpdCm9sZCA9ICdpZiBfLCBlcnIgPSBkYi5FeGVjKGBDUkVBVEUgVEFCTEUgSUYgTk9UIEVYSVNUUyBzbmFwc2hvdHMgKHBhY2thZ2UgVEVYVCBOT1QgTlVMTCwgZG93bmxvYWRzIElOVEVHRVIgTk9UIE5VTEwsIGNvbGxlY3RlZF9hdCBURVhUIE5PVCBOVUxMKTsgQ1JFQVRFIElOREVYIElGIE5PVCBFWElTVFMgaWR4X3NuYXBzaG90c19wa2dfdGltZSBPTiBzbmFwc2hvdHMocGFja2FnZSwgY29sbGVjdGVkX2F0KTtgKTsgaWYgZXJyICE9IG5pbCB7JwpuZXcgPSAnaWYgXywgZXJyID0gZGIuRXhlYyhgQ1JFQVRFIFRBQkxFIElGIE5PVCBFWElTVFMgc25hcHNob3RzIChwYWNrYWdlIFRFWFQgTk9UIE5VTEwsIGRvd25sb2FkcyBJTlRFR0VSIE5PVCBOVUxMLCBjb2xsZWN0ZWRfYXQgVEVYVCBOT1QgTlVMTCk7IENSRUFURSBJTkRFWCBJRiBOT1QgRVhJU1RTIGlkeF9zbmFwc2hvdHNfcGtnX3RpbWUgT04gc25hcHNob3RzKHBhY2thZ2UsIGNvbGxlY3RlZF9hdCk7YCArIGNvbGxlY3Rpb25TdGF0ZVNjaGVtYSk7IGVyciAhPSBuaWwgeycKaWYgb2xkIG5vdCBpbiBzOgogICAgcmFpc2UgU3lzdGVtRXhpdCgiT3BlblN0b3JlIHNjaGVtYSBibG9jayBub3QgZm91bmQiKQpzID0gcy5yZXBsYWNlKG9sZCwgbmV3LCAxKQpwLndyaXRlX3RleHQocykKClBhdGgoImNvbGxlY3Rvcl9oYXJkZW4uZ28iKS53cml0ZV90ZXh0KCIiInBhY2thZ2UgbWFpbgoKaW1wb3J0ICgKCVwiZXJyb3JzXCIKCVwicmVnZXhwXCIKCVwic3RyY29udlwiCglcInN0cmluZ3NcIikKCnZhciBkb3dubG9hZHNQYXR0ZXJucyA9IFtdKnJlZ2V4LlJlZ2V4cHsKCXJlZ2V4Lk11c3RDb21waWxlKGAoP2lzKTxoM1tePl0qXFxidGl0bGU9W1wiJ10oWzAtOV1bMC05LF8uIF0qKVtcIiddW14+XSo+Lio/PC9oMz4uezAsMTAwMH0/PHNwYW5bXj5dKj5cXHMqVG90YWwgZG93bmxvYWRzXFxzKjwvc3Bhbj5gKSwKCXJlZ2V4Lk11c3RDb21waWxlKGAoP2lzKTxzcGFuW14+XSo+XFxzKlRvdGFsIGRvd25sb2Fkc1xccyo8L3NwYW4+LnswLDEwMDB9PzxoM1tePl0qXFxidGl0bGU9W1wiJ10oWzAtOV1bMC05LF8uIF0qKVtcIiddW14+XSo+YCksCn0KCmZ1bmMgcGFyc2VEb3dubG9hZENvdW50KHRleHQgc3RyaW5nKSAoaW50NjQsIGVycm9yKSB7Cglmb3IgXywgc mUgOj0gcmFuZ2UgZG93bmxvYWRzUGF0dGVybnMgewoJCW0gOj0gcmUuRmluZFN0cmluZ1N1Ym1hdGNoKHRleHQpCgkJaWYgbGVuKG0pICE9IDIgewoJCQljb250aW51ZQoJCX0KCQluIDo9IHN0cmluZ3MuTmV3UmVwbGFjZXIoXCIsXCIsIFwiXCIsIFwiLlwiLCBcIlwiLCBcIl9cIiwgXCJcIiwgXCIgXCIsIFwiXCIpLlJlcGxhY2UobVsxXSkKCQlpZiB2LCBlcnIgOj0gc3RyY29udi5QYXJzZUludChuLCAxMCwgNjQpOyBlcnIgPT0gbmlsIHsKCQkJcmV0dXJuIHYsIG5pbAoJCX0KCX0KCXJldHVybiAwLCBlcnJvcnMuTmV3KFwiZG93bmxvYWQgY291bnQgbm90IGZvdW5kIG9uIEdpdEh1YiBwYWNrYWdlIHBhZ2VcIikKfQoiIiIpCgpwID0gUGF0aCgibTI0X3N0b3JlLmdvIikKcyA9IHAucmVhZF90ZXh0KCkKZW5zdXJlID0gIiIiZnVuYyAocyAqU3RvcmUpIGVuc3VyZUNvbGxlY3Rpb25TdGF0ZSgpIGVycm9yIHsKCV8sIGVyciA6PSBzLmRiLkV4ZWMoY29sbGVjdGlvblN0YXRlU2NoZW1hKQoJcmV0dXJuIGVycgp9CgoiIiIKcyA9IHMucmVwbGFjZShlbnN1cmUsICIiKQpzID0gcy5yZXBsYWNlKCIiIlx0aWYgZXJyIDo9IHMuZW5zdXJlQ29sbGVjdGlvblN0YXRlKCk7IGVyciAhPSBuaWwgewoJCXJldHVybiBlcnIKCX0KIiIiLCAiIiwgMSkKcyA9IHMucmVwbGFjZSgiIiJcdGlmIGVyciA6PSBzLmVuc3VyZUNvbGxlY3Rpb25TdGF0ZSgpOyBlcnIgIT0gbmlsIHsKCQlyZXR1cm4gZmFpbHVyZUNvdW50ZXJ7fSwgZXJyCgl9CiIiIiwgIiIsIDEpCnAud3JpdGVfdGV4dChzKQoKUGF0aCgibTMzX3JlZmFjdG9yX3Rlc3QuZ28iKS53cml0ZV90ZXh0KCIiInBhY2thZ2UgbWFpbgoKaW1wb3J0ICgKCVwicGF0aC9maWxlcGF0aFwiCglcInRlc3RpbmdcIikKCmZ1bmMgVGVzdE0zM0Rvd25sb2FkUGFyc2VyVXNlc1RvdGFsRG93bmxvYWRzQ2FyZCh0ICp0ZXN0aW5nLlQpIHsKCWdvb2QgOj0gYDxoMyB0aXRsZT1cIjEyLDM0NVwiPjEyLjNrPC9oMz48c3Bhbj5Ub3RhbCBkb3dubG9hZHM8L3NwYW4+YAoJZ290LCBlcnIgOj0gcGFyc2VEb3dubG9hZENvdW50KGdvb2QpCglpZiBlcnIgIT0gbmlsIHx8IGdvdCAhPSAxMjM0NSB7CgkJdC5GYXRhbGYoXCJnb3Q9JWQgZXJyPSV2XCIsIGdvdCwgZXJyKQoJfQoJaWYgXywgZXJyIDo9IHBhcnNlRG93bmxvYWRDb3VudChgPGRpdj45OTkgZG93bmxvYWRzPC9kaXY+YCk7IGVyciA9PSBuaWwgewoJCXQuRmF0YWwoXCJnZW5lcmljIGRvd25sb2FkcyB0ZXh0IG11c3Qgbm90IGJlIGFjY2VwdGVkXCIpCgl9Cn0KCmZ1bmMgVGVzdE0zM09wZW5TdG9yZUluaXRpYWxpemVzQ29sbGVjdGlvblN0YXRlKHQgKnRlc3RpbmcuVCkgewoJcywgZXJyIDo9IE9wZW5TdG9yZShmaWxlcGF0aC5Kb2luKHQuVGVtcERpcigpLCBcIm0zMy5kYlwiKSkKCWlmIGVyciAhPSBuaWwgewoJCXQuRmF0YWwoZXJyKQoJfQoJZGVmZXIgcy5DbG9zZSgpCgl2YXIgbmFtZSBzdHJpbmcKCWlmIGVyciA6PSBzLmRiLlF1ZXJ5Um93KG BTRUxFQ1QgbmFtZSBGUk9NIHNxbGl0ZV9tYXN0ZXIgV0hFUkUgdHlwZT0ndGFibGUnIEFORCBuYW1lPSdjb2xsZWN0aW9uX3N0YXRlJ2ApLlNjYW4oJm5hbWUpOyBlcnIgIT0gbmlsIHsKCQl0LkZhdGFsKGVycikKCX0KCWlmIG5hbWUgIT0gXCJjb2xsZWN0aW9uX3N0YXRlXCIgewoJCXQuRmF0YWxmKFwidW5leHBlY3RlZCB0YWJsZSAlcVwiLCBuYW1lKQoJfQp9CiIiIykK
         run: |
-          echo "$PATCH_B64" | base64 -d > /tmp/m33.py
-          python3 /tmp/m33.py
-          gofmt -w -- main.go m3.go collector_harden.go m24_store.go m33_refactor_test.go
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('m3.go')
+          s = p.read_text()
+          s = s.replace('\t"html/template"\n', '')
+          start = s.index('var dashboardTemplate =')
+          end = s.index('func (a *App) handleM3Index', start)
+          p.write_text(s[:start] + s[end:])
+
+          p = Path('main.go')
+          s = p.read_text()
+          s = s.replace('\t"regexp"\n', '')
+          start = s.index('var downloadsPatterns =')
+          end = s.index('func (c GitHubHTMLCollector) Collect', start)
+          s = s[:start] + s[end:]
+          start = s.index('\tfor _, re := range downloadsPatterns {', s.index('func (c GitHubHTMLCollector) Collect'))
+          marker = '\treturn 0, errors.New("download count not found on GitHub package page")\n'
+          end = s.index(marker, start) + len(marker)
+          s = s[:start] + '\treturn parseDownloadCount(text)\n' + s[end:]
+          old = 'if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS snapshots (package TEXT NOT NULL, downloads INTEGER NOT NULL, collected_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS idx_snapshots_pkg_time ON snapshots(package, collected_at);`); err != nil {'
+          new = 'if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS snapshots (package TEXT NOT NULL, downloads INTEGER NOT NULL, collected_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS idx_snapshots_pkg_time ON snapshots(package, collected_at);` + collectionStateSchema); err != nil {'
+          if old not in s:
+              raise SystemExit('OpenStore schema block not found')
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('collector_harden.go')
+          s = p.read_text()
+          s = s.replace('var hardenedDownloadsPatterns', 'var downloadsPatterns')
+          replacement = '''func parseDownloadCount(text string) (int64, error) {
+          \tfor _, re := range downloadsPatterns {
+          \t\tm := re.FindStringSubmatch(text)
+          \t\tif len(m) != 2 {
+          \t\t\tcontinue
+          \t\t}
+          \t\tn := strings.NewReplacer(",", "", ".", "", "_", "", " ", "").Replace(m[1])
+          \t\tif v, err := strconv.ParseInt(n, 10, 64); err == nil {
+          \t\t\treturn v, nil
+          \t\t}
+          \t}
+          \treturn 0, errors.New("download count not found on GitHub package page")
+          }
+          '''
+          s = re.sub(r'func init\(\) \{.*?\n\}', replacement, s, flags=re.S)
+          s = s.replace('import "regexp"', 'import (\n\t"errors"\n\t"regexp"\n\t"strconv"\n\t"strings"\n)')
+          p.write_text(s)
+
+          p = Path('m24_store.go')
+          s = p.read_text()
+          s = re.sub(r'func \(s \*Store\) ensureCollectionState\(\) error \{.*?\n\}\n\n', '', s, count=1, flags=re.S)
+          s = s.replace('\tif err := s.ensureCollectionState(); err != nil {\n\t\treturn err\n\t}\n', '', 1)
+          s = s.replace('\tif err := s.ensureCollectionState(); err != nil {\n\t\treturn failureCounter{}, err\n\t}\n', '', 1)
+          p.write_text(s)
+          PY
+          gofmt -w -- main.go m3.go collector_harden.go m24_store.go
           test -z "$(gofmt -l .)"
           go test ./...
           go vet ./...
@@ -28,6 +79,6 @@ jobs:
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add main.go m3.go collector_harden.go m24_store.go m33_refactor_test.go
+          git add main.go m3.go collector_harden.go m24_store.go
           git commit -m 'Refactor M3 analytics collector and store internals'
           git push origin HEAD:main
