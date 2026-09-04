@@ -54,9 +54,9 @@ func TestGitHubPackagesDiscovererLive(t *testing.T) {
 	if os.Getenv("GHCR_LIVE_DISCOVERY_TEST") != "1" {
 		t.Skip("set GHCR_LIVE_DISCOVERY_TEST=1 to exercise GitHub Packages API")
 	}
-	token := os.Getenv("GITHUB_TOKEN")
+	token := os.Getenv("GHCR_STATS_GITHUB_TOKEN")
 	if token == "" {
-		t.Fatal("GITHUB_TOKEN is required for live discovery test")
+		t.Fatal("GHCR_STATS_GITHUB_TOKEN is required for live discovery test")
 	}
 	d := GitHubPackagesDiscoverer{
 		Client: &http.Client{Timeout: 25 * time.Second},
