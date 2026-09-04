@@ -276,31 +276,10 @@ func (a *App) handleOrgHistory(w http.ResponseWriter, r *http.Request) {
 	if d > 0 {
 		since = time.Now().UTC().Add(-d)
 	}
-	byTime := map[string]int64{}
-	for _, pkg := range a.packageNames() {
-		points, err := a.store.History(pkg, since)
-		if err != nil {
-			continue
-		}
-		for _, p := range points {
-			byTime[p.Timestamp.UTC().Format(time.RFC3339Nano)] += p.Downloads
-		}
-	}
-	keys := make([]string, 0, len(byTime))
-	for k := range byTime {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	points := make([]HistoryPoint, 0, len(keys))
-	var prev int64
-	for i, k := range keys {
-		ts, _ := time.Parse(time.RFC3339Nano, k)
-		delta := int64(0)
-		if i > 0 && byTime[k] >= prev {
-			delta = byTime[k] - prev
-		}
-		points = append(points, HistoryPoint{Timestamp: ts, Downloads: byTime[k], Delta: delta})
-		prev = byTime[k]
+	points, err := a.store.OrgHistory(a.packageNames(), since)
+	if err != nil {
+		http.Error(w, "organization history query failed", http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"owner": a.cfg.Owner, "period": period, "points": points})
