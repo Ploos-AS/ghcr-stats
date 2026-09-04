@@ -56,6 +56,11 @@ func writeHistoryExport(w http.ResponseWriter, format, owner, pkg, period string
 }
 
 func (a *App) handlePackageExport(w http.ResponseWriter, r *http.Request, pkg string) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	format, err := exportFormat(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -75,14 +80,17 @@ func (a *App) handlePackageExport(w http.ResponseWriter, r *http.Request, pkg st
 		http.Error(w, "no data", http.StatusNotFound)
 		return
 	}
-	if err := writeHistoryExport(w, format, a.cfg.Owner, pkg, period, points); err != nil {
-		return
-	}
+	_ = writeHistoryExport(w, format, a.cfg.Owner, pkg, period, points)
 }
 
 func (a *App) handleOrgExport(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/api/v1/org/export" {
 		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	format, err := exportFormat(r)
@@ -104,7 +112,5 @@ func (a *App) handleOrgExport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no data", http.StatusNotFound)
 		return
 	}
-	if err := writeHistoryExport(w, format, a.cfg.Owner, "", period, points); err != nil {
-		return
-	}
+	_ = writeHistoryExport(w, format, a.cfg.Owner, "", period, points)
 }
