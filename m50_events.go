@@ -135,10 +135,19 @@ func (a *App) emitEvent(e Event) {
 		fmt.Printf("webhook config: %v\n", err)
 	} else if sender.Enabled() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
 		if err := sender.Deliver(ctx, e); err != nil {
-			fmt.Printf("deliver event %s: %v\n", e.Type, err)
+			fmt.Printf("deliver webhook event %s: %v\n", e.Type, err)
 		}
+		cancel()
+	}
+	if sender, err := runtimeNotificationSender(); err != nil {
+		fmt.Printf("notification config: %v\n", err)
+	} else if sender.Enabled() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := sender.Deliver(ctx, e); err != nil {
+			fmt.Printf("deliver notification event %s: %v\n", e.Type, err)
+		}
+		cancel()
 	}
 }
 
