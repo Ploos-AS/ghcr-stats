@@ -57,7 +57,7 @@ func (c GitHubHTMLCollector) Collect(ctx context.Context, owner, pkg string) (in
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("User-Agent", "Ploos-AS-ghcr-stats/0.2")
+	req.Header.Set("User-Agent", "Ploos-AS-ghcr-stats/0.3")
 	resp, err := c.Client.Do(req)
 	if err != nil {
 		return 0, err
@@ -98,12 +98,10 @@ func OpenStore(path string) (*Store, error) {
 }
 
 func (s *Store) Close() error { return s.db.Close() }
-
 func (s *Store) Save(st PackageStat) error {
 	_, err := s.db.Exec("INSERT INTO snapshots(package,downloads,collected_at) VALUES(?,?,?)", st.Package, st.Downloads, st.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	return err
 }
-
 func (s *Store) Latest(pkg string) (PackageStat, error) {
 	var st PackageStat
 	var ts string
@@ -114,7 +112,6 @@ func (s *Store) Latest(pkg string) (PackageStat, error) {
 	st.UpdatedAt, err = time.Parse(time.RFC3339Nano, ts)
 	return st, err
 }
-
 func (s *Store) DeltaSince(pkg string, since time.Time) (int64, error) {
 	latest, err := s.Latest(pkg)
 	if err != nil {
@@ -128,11 +125,10 @@ func (s *Store) DeltaSince(pkg string, since time.Time) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	d := latest.Downloads - baseline
-	if d < 0 {
+	if latest.Downloads < baseline {
 		return 0, nil
 	}
-	return d, nil
+	return latest.Downloads - baseline, nil
 }
 
 type App struct {
@@ -154,7 +150,6 @@ func (a *App) packageNames() []string {
 	sort.Strings(out)
 	return out
 }
-
 func (a *App) packageState() ([]string, string, string) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -162,7 +157,6 @@ func (a *App) packageState() ([]string, string, string) {
 	sort.Strings(out)
 	return out, a.packageSource, a.lastDiscoveryErr
 }
-
 func (a *App) refreshPackages(ctx context.Context) {
 	if a.cfg.PackagesExplicit || a.discoverer == nil {
 		return
@@ -184,7 +178,6 @@ func (a *App) refreshPackages(ctx context.Context) {
 	a.mu.Unlock()
 	log.Printf("discovered %d public container packages for %s", len(pkgs), a.cfg.Owner)
 }
-
 func (a *App) collectAll(ctx context.Context) {
 	a.refreshPackages(ctx)
 	for _, pkg := range a.packageNames() {
@@ -206,7 +199,6 @@ func (a *App) collectAll(ctx context.Context) {
 		}
 	}
 }
-
 func (a *App) loop(ctx context.Context) {
 	a.collectAll(ctx)
 	t := time.NewTicker(a.cfg.Interval)
@@ -227,27 +219,18 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/version", handleVersion)
 	mux.HandleFunc("/api/v1/health", a.handleHealthJSON)
 	mux.HandleFunc("/api/v1/packages", a.handlePackageList)
-	mux.HandleFunc("/api/v1/packages/", a.handleJSON)
+	mux.HandleFunc("/api/v1/packages/", a.handlePackageAPI)
+	mux.HandleFunc("/api/v1/rankings", a.handleRankings)
+	mux.HandleFunc("/api/v1/org/history", a.handleOrgHistory)
 	mux.HandleFunc("/api/v1/org", a.handleOrgJSON)
 	mux.HandleFunc("/api/v1/badge/", a.handleShields)
 	mux.HandleFunc("/badge/", a.handleM1Badge)
 	mux.HandleFunc("/metrics", a.handleMetrics)
-	mux.HandleFunc("/", a.handleIndex)
+	mux.HandleFunc("/", a.handleM3Index)
 	return mux
 }
 
-func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	io.WriteString(w, "<!doctype html><meta charset=utf-8><title>ghcr-stats</title><h1>Ploos-AS GHCR stats</h1><ul>")
-	for _, pkg := range a.packageNames() {
-		fmt.Fprintf(w, "<li><a href=\"/api/v1/packages/%s\">%s</a> — <img alt=\"pulls\" src=\"/badge/%s/pulls.svg\"></li>", pkg, pkg, pkg)
-	}
-	io.WriteString(w, "</ul>")
-}
+func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) { a.handleM3Index(w, r) }
 
 func (a *App) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/api/v1/packages" {
@@ -256,13 +239,7 @@ func (a *App) handlePackageList(w http.ResponseWriter, r *http.Request) {
 	}
 	pkgs, source, discoveryErr := a.packageState()
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"owner":           a.cfg.Owner,
-		"source":          source,
-		"count":           len(pkgs),
-		"packages":        pkgs,
-		"discovery_error": discoveryErr,
-	})
+	_ = json.NewEncoder(w).Encode(map[string]any{"owner": a.cfg.Owner, "source": source, "count": len(pkgs), "packages": pkgs, "discovery_error": discoveryErr})
 }
 
 func (a *App) handleJSON(w http.ResponseWriter, r *http.Request) {
@@ -271,16 +248,22 @@ func (a *App) handleJSON(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	st, err := a.store.Latest(pkg)
+	now := time.Now().UTC()
+	s, err := a.analyticsSummary(pkg, now)
 	if err != nil {
 		http.Error(w, "no data", http.StatusNotFound)
 		return
 	}
-	d7, _ := a.store.DeltaSince(pkg, time.Now().Add(-7*24*time.Hour))
-	d30, _ := a.store.DeltaSince(pkg, time.Now().Add(-30*24*time.Hour))
-	health := a.collectorHealth(pkg, time.Now().UTC())
+	health := a.collectorHealth(pkg, now)
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"package": st.Package, "downloads": st.Downloads, "downloads_week": d7, "downloads_month": d30, "updated_at": st.UpdatedAt, "collector": a.collector.Name(), "collector_up": health.Up, "stale": health.Stale, "last_success": health.LastSuccess, "last_error": health.LastError})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"package": s.Package, "downloads": s.Downloads,
+		"downloads_24h": s.Downloads24h, "downloads_week": s.Downloads7d,
+		"downloads_month": s.Downloads30d, "downloads_90d": s.Downloads90d,
+		"updated_at": s.UpdatedAt, "collector": a.collector.Name(),
+		"collector_up": health.Up, "stale": health.Stale,
+		"last_success": health.LastSuccess, "last_error": health.LastError,
+	})
 }
 
 func compact(n int64) string {
@@ -295,14 +278,12 @@ func compact(n int64) string {
 		return strconv.FormatInt(n, 10)
 	}
 }
-
 func badgeSVG(label, value string) string {
 	lw := 8*len(label) + 18
 	vw := 8*len(value) + 18
 	body := fmt.Sprintf(`<rect width="%d" height="20" fill="#555"/><rect x="%d" width="%d" height="20" fill="#2ea44f"/><g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11"><text x="%d" y="14">%s</text><text x="%d" y="14">%s</text></g>`, lw+vw, lw, vw, lw/2, html.EscapeString(label), lw+vw/2, html.EscapeString(value))
 	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="20" role="img">%s</svg>`, lw+vw, body)
 }
-
 func (a *App) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 	for _, pkg := range a.packageNames() {
@@ -337,7 +318,6 @@ func readToken() string {
 	}
 	return ""
 }
-
 func loadConfig() Config {
 	var pkgs []string
 	for _, p := range strings.Split(os.Getenv("GHCR_STATS_PACKAGES"), ",") {
@@ -355,50 +335,20 @@ func loadConfig() Config {
 			interval = d
 		}
 	}
-	cfg := Config{
-		Listen:           os.Getenv("GHCR_STATS_LISTEN"),
-		Owner:            os.Getenv("GHCR_STATS_OWNER"),
-		DBPath:           os.Getenv("GHCR_STATS_DB"),
-		Packages:         pkgs,
-		PackagesExplicit: explicit,
-		Interval:         interval,
-		GitHubToken:      readToken(),
-	}
-	if cfg.Listen == "" {
-		cfg.Listen = ":8080"
-	}
-	if cfg.Owner == "" {
-		cfg.Owner = "Ploos-AS"
-	}
-	if cfg.DBPath == "" {
-		cfg.DBPath = "/data/ghcr-stats.db"
-	}
+	cfg := Config{Listen: os.Getenv("GHCR_STATS_LISTEN"), Owner: os.Getenv("GHCR_STATS_OWNER"), DBPath: os.Getenv("GHCR_STATS_DB"), Packages: pkgs, PackagesExplicit: explicit, Interval: interval, GitHubToken: readToken()}
+	if cfg.Listen == "" { cfg.Listen = ":8080" }
+	if cfg.Owner == "" { cfg.Owner = "Ploos-AS" }
+	if cfg.DBPath == "" { cfg.DBPath = "/data/ghcr-stats.db" }
 	return cfg
 }
-
 func main() {
 	cfg := loadConfig()
 	store, err := OpenStore(cfg.DBPath)
-	if err != nil {
-		log.Fatal(err)
-	}
+	if err != nil { log.Fatal(err) }
 	defer store.Close()
-
 	client := &http.Client{Timeout: 25 * time.Second}
-	app := &App{
-		cfg:           cfg,
-		store:         store,
-		collector:     GitHubHTMLCollector{Client: client},
-		packages:      append([]string(nil), cfg.Packages...),
-		packageSource: "fallback",
-		lastErr:       map[string]string{},
-	}
-	if cfg.PackagesExplicit {
-		app.packageSource = "explicit"
-	} else if cfg.GitHubToken != "" {
-		app.discoverer = GitHubPackagesDiscoverer{Client: client, Token: cfg.GitHubToken}
-	}
-
+	app := &App{cfg: cfg, store: store, collector: GitHubHTMLCollector{Client: client}, packages: append([]string(nil), cfg.Packages...), packageSource: "fallback", lastErr: map[string]string{}}
+	if cfg.PackagesExplicit { app.packageSource = "explicit" } else if cfg.GitHubToken != "" { app.discoverer = GitHubPackagesDiscoverer{Client: client, Token: cfg.GitHubToken} }
 	go app.loop(context.Background())
 	srv := &http.Server{Addr: cfg.Listen, Handler: app.routes(), ReadHeaderTimeout: 5 * time.Second}
 	log.Printf("ghcr-stats %s (%s) listening on %s for %s (%d initial packages, source=%s)", version, revision, cfg.Listen, cfg.Owner, len(cfg.Packages), app.packageSource)
