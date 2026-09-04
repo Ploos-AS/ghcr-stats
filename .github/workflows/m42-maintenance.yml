@@ -1,0 +1,74 @@
+name: M4.2 maintenance qualification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Unit qualification
+        run: |
+          gofmt_check="$(gofmt -l -- *.go)"
+          test -z "$gofmt_check" || { printf '%s\n' "$gofmt_check"; exit 1; }
+          go test ./...
+          go vet ./...
+
+      - name: Build local image
+        run: docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t ghcr.io/ploos-as/ghcr-stats:latest .
+
+      - name: Qualify backup restore and maintenance commands
+        env:
+          GHCR_STATS_PACKAGES: soju
+          GHCR_STATS_INTERVAL: 1h
+          GHCR_STATS_RETENTION: 24h
+        run: |
+          set -euxo pipefail
+          mkdir -p data
+          sudo chown 1000:1000 data
+          trap 'docker compose down -v || true' EXIT
+
+          docker compose up -d --pull never
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz | grep -qx ok; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/healthz | grep -qx ok
+
+          for i in $(seq 1 30); do
+            if docker compose exec -T ghcr-stats ghcr-stats integrity; then
+              break
+            fi
+            sleep 1
+          done
+          docker compose exec -T ghcr-stats ghcr-stats integrity
+
+          docker compose run --rm ghcr-stats backup /data/backup-ci.db
+          test -s data/backup-ci.db
+
+          docker compose stop ghcr-stats
+          docker compose run --rm -e GHCR_STATS_DB=/data/restored-ci.db ghcr-stats restore /data/backup-ci.db
+          test -s data/restored-ci.db
+          docker compose run --rm -e GHCR_STATS_DB=/data/restored-ci.db ghcr-stats integrity
+          docker compose run --rm -e GHCR_STATS_DB=/data/restored-ci.db ghcr-stats maintain
+
+          docker compose start ghcr-stats
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8080/healthz | grep -qx ok; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
