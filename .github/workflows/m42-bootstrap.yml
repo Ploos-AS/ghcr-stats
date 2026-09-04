@@ -1,0 +1,77 @@
+name: M4.2 bootstrap
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/m42-bootstrap.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Integrate maintenance lifecycle
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('main.go')
+          s = p.read_text()
+          old = '''\t\tif err := a.store.Save(PackageStat{Package: pkg, Downloads: count, UpdatedAt: time.Now().UTC()}); err != nil {
+          \t\t\tlog.Printf("save %s: %v", pkg, err)
+          \t\t}
+          \t}
+          }
+          func (a *App) loop'''
+          new = '''\t\tif err := a.store.Save(PackageStat{Package: pkg, Downloads: count, UpdatedAt: time.Now().UTC()}); err != nil {
+          \t\t\tlog.Printf("save %s: %v", pkg, err)
+          \t\t}
+          \t}
+          \tif retention := retentionDuration(); retention > 0 {
+          \t\tdeleted, err := a.store.ApplyRetention(time.Now().UTC().Add(-retention))
+          \t\tif err != nil {
+          \t\t\tlog.Printf("apply retention: %v", err)
+          \t\t} else if deleted > 0 {
+          \t\t\tlog.Printf("retention pruned %d old snapshots", deleted)
+          \t\t}
+          \t}
+          }
+          func (a *App) loop'''
+          if old not in s:
+              raise SystemExit('collectAll integration anchor not found')
+          s = s.replace(old, new, 1)
+          old = '''func main() {
+          \tcfg := loadConfig()
+          \tstore, err := OpenStore(cfg.DBPath)'''
+          new = '''func main() {
+          \tcfg := loadConfig()
+          \tif handled, err := runMaintenanceCommand(cfg, os.Args[1:]); handled {
+          \t\tif err != nil {
+          \t\t\tlog.Fatal(err)
+          \t\t}
+          \t\treturn
+          \t}
+          \tstore, err := OpenStore(cfg.DBPath)'''
+          if old not in s:
+              raise SystemExit('main integration anchor not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+          gofmt -w main.go m42_maintenance.go
+          go test ./...
+          go vet ./...
+      - name: Commit integration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add main.go m42_maintenance.go
+          git commit -m 'Integrate M4.2 maintenance lifecycle'
+          git push origin HEAD:main
