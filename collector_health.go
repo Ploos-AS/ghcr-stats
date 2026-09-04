@@ -8,11 +8,13 @@ import (
 )
 
 type CollectorHealth struct {
-	Package     string    `json:"package"`
-	Up          bool      `json:"up"`
-	Stale       bool      `json:"stale"`
-	LastSuccess time.Time `json:"last_success,omitempty"`
-	LastError   string    `json:"last_error,omitempty"`
+	Package             string    `json:"package"`
+	Up                  bool      `json:"up"`
+	Stale               bool      `json:"stale"`
+	LastSuccess         time.Time `json:"last_success,omitempty"`
+	LastError           string    `json:"last_error,omitempty"`
+	TotalFailures       uint64    `json:"total_failures"`
+	ConsecutiveFailures uint64    `json:"consecutive_failures"`
 }
 
 func (a *App) staleAfter() time.Duration {
@@ -36,6 +38,8 @@ func (a *App) collectorHealth(pkg string, now time.Time) CollectorHealth {
 	}
 
 	fs := a.failureStats(pkg)
+	h.TotalFailures = fs.Total
+	h.ConsecutiveFailures = fs.Consecutive
 	h.LastError = fs.LastError
 	// Keep the older in-memory state as a compatibility/failure fallback.
 	// Persistent SQLite state is authoritative whenever it contains an error.
