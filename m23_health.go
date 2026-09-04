@@ -26,9 +26,37 @@ type OrgHealth struct {
 	ConsecutiveFailures uint64 `json:"consecutive_failures"`
 }
 
-func (a *App) recordCollectionResult(pkg string, err error) {
-	if dbErr := a.store.RecordCollectionResult(pkg, err, time.Now().UTC()); dbErr != nil {
+func (a *App) recordCollectionResult(pkg string, collectErr error) {
+	before := a.failureStats(pkg)
+	at := time.Now().UTC()
+	if dbErr := a.store.RecordCollectionResult(pkg, collectErr, at); dbErr != nil {
 		log.Printf("persist collection state %s: %v", pkg, dbErr)
+		return
+	}
+	if collectErr != nil && before.Consecutive == 0 {
+		a.emitEvent(Event{
+			Type:      "collector_failed",
+			Severity:  "error",
+			Package:   pkg,
+			Message:   collectErr.Error(),
+			CreatedAt: at,
+			Metadata: map[string]any{
+				"previous_consecutive_failures": before.Consecutive,
+			},
+		})
+		return
+	}
+	if collectErr == nil && before.Consecutive > 0 {
+		a.emitEvent(Event{
+			Type:      "collector_recovered",
+			Severity:  "info",
+			Package:   pkg,
+			Message:   "collector recovered",
+			CreatedAt: at,
+			Metadata: map[string]any{
+				"previous_consecutive_failures": before.Consecutive,
+			},
+		})
 	}
 }
 
@@ -84,6 +112,8 @@ func (a *App) writeM23Metrics(w http.ResponseWriter) {
 	fmt.Fprintf(w, "ghcr_stats_org_unhealthy_packages{owner=%q} %d\n", a.cfg.Owner, org.UnhealthyPackages)
 	fmt.Fprintf(w, "ghcr_stats_org_stale_packages{owner=%q} %d\n", a.cfg.Owner, org.StalePackages)
 	fmt.Fprintf(w, "ghcr_stats_org_failing_packages{owner=%q} %d\n", a.cfg.Owner, org.FailingPackages)
+	a.writeM50Metrics(w)
+	a.writeM51Metrics(w)
 }
 
 func (a *App) handleOrgHealthJSON(w http.ResponseWriter, r *http.Request) {
