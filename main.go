@@ -183,6 +183,14 @@ func (a *App) collectAll(ctx context.Context) {
 			log.Printf("save %s: %v", pkg, err)
 		}
 	}
+	if retention := retentionDuration(); retention > 0 {
+		deleted, err := a.store.ApplyRetention(time.Now().UTC().Add(-retention))
+		if err != nil {
+			log.Printf("apply retention: %v", err)
+		} else if deleted > 0 {
+			log.Printf("retention pruned %d old snapshots", deleted)
+		}
+	}
 }
 func (a *App) loop(ctx context.Context) {
 	a.collectAll(ctx)
@@ -334,6 +342,12 @@ func loadConfig() Config {
 }
 func main() {
 	cfg := loadConfig()
+	if handled, err := runMaintenanceCommand(cfg, os.Args[1:]); handled {
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	store, err := OpenStore(cfg.DBPath)
 	if err != nil {
 		log.Fatal(err)
